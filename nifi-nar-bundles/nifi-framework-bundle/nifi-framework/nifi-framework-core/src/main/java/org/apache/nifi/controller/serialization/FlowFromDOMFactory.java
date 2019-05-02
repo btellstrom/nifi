@@ -159,6 +159,7 @@ public class FlowFromDOMFactory {
 
         final Element versionControlInfoElement = DomUtils.getChild(element, "versionControlInformation");
         dto.setVersionControlInformation(getVersionControlInformation(versionControlInfoElement));
+        dto.setParameterContextId(getString(element, "parameterContextId"));
 
         final Set<ProcessorDTO> processors = new HashSet<>();
         final Set<ConnectionDTO> connections = new HashSet<>();

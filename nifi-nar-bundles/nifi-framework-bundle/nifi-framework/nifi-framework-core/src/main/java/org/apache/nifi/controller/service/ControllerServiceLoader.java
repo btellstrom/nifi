@@ -181,7 +181,7 @@ public class ControllerServiceLoader {
 
         if (controllerService.getProperties() != null) {
             Map<String,String> properties = new HashMap<>();
-            for (Map.Entry<PropertyDescriptor, String> propEntry : controllerService.getProperties().entrySet()) {
+            for (Map.Entry<PropertyDescriptor, String> propEntry : controllerService.getRawPropertyValues().entrySet()) {
                 properties.put(propEntry.getKey().getName(), propEntry.getValue());
             }
             clone.setProperties(properties);

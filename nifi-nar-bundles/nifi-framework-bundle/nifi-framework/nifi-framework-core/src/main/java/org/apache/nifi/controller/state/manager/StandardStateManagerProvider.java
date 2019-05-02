@@ -30,6 +30,7 @@ import org.apache.nifi.components.state.StateManagerProvider;
 import org.apache.nifi.components.state.StateMap;
 import org.apache.nifi.components.state.StateProvider;
 import org.apache.nifi.components.state.StateProviderInitializationContext;
+import org.apache.nifi.controller.PropertyConfiguration;
 import org.apache.nifi.controller.state.ConfigParseException;
 import org.apache.nifi.controller.state.StandardStateManager;
 import org.apache.nifi.controller.state.StandardStateProviderInitializationContext;
@@ -39,6 +40,9 @@ import org.apache.nifi.framework.security.util.SslContextFactory;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.nar.NarCloseable;
+import org.apache.nifi.parameter.ParameterParser;
+import org.apache.nifi.parameter.ParameterReferences;
+import org.apache.nifi.parameter.StandardParameterParser;
 import org.apache.nifi.processor.SimpleProcessLogger;
 import org.apache.nifi.processor.StandardValidationContext;
 import org.apache.nifi.registry.VariableRegistry;
@@ -185,16 +189,25 @@ public class StandardStateManagerProvider implements StateManagerProvider{
         }
 
         //create variable registry
+        final ParameterParser parser = new StandardParameterParser();
         final Map<PropertyDescriptor, PropertyValue> propertyMap = new HashMap<>();
-        final Map<PropertyDescriptor, String> propertyStringMap = new HashMap<>();
+        final Map<PropertyDescriptor, PropertyConfiguration> propertyStringMap = new HashMap<>();
         for (final PropertyDescriptor descriptor : provider.getPropertyDescriptors()) {
             propertyMap.put(descriptor, new StandardPropertyValue(descriptor.getDefaultValue(),null, variableRegistry));
-            propertyStringMap.put(descriptor, descriptor.getDefaultValue());
+
+            final ParameterReferences references = parser.findReferences(descriptor.getDefaultValue());
+            final PropertyConfiguration configuration = new PropertyConfiguration(descriptor.getDefaultValue(), references);
+
+            propertyStringMap.put(descriptor, configuration);
         }
 
         for (final Map.Entry<String, String> entry : providerConfig.getProperties().entrySet()) {
             final PropertyDescriptor descriptor = provider.getPropertyDescriptor(entry.getKey());
-            propertyStringMap.put(descriptor, entry.getValue());
+
+            final ParameterReferences references = parser.findReferences(descriptor.getDefaultValue());
+            final PropertyConfiguration configuration = new PropertyConfiguration(descriptor.getDefaultValue(), references);
+
+            propertyStringMap.put(descriptor, configuration);
             propertyMap.put(descriptor, new StandardPropertyValue(entry.getValue(),null, variableRegistry));
         }
 
@@ -206,7 +219,7 @@ public class StandardStateManagerProvider implements StateManagerProvider{
             provider.initialize(initContext);
         }
 
-        final ValidationContext validationContext = new StandardValidationContext(null, propertyStringMap, null, null, null,variableRegistry);
+        final ValidationContext validationContext = new StandardValidationContext(null, propertyStringMap, null, null, null, variableRegistry, null);
         final Collection<ValidationResult> results = provider.validate(validationContext);
         final StringBuilder validationFailures = new StringBuilder();
 

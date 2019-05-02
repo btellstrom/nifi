@@ -35,6 +35,7 @@ import org.apache.nifi.web.api.dto.RevisionDTO;
 import org.apache.nifi.web.api.dto.status.ProcessorStatusDTO;
 import org.apache.nifi.web.api.entity.ActivateControllerServicesEntity;
 import org.apache.nifi.web.api.entity.AffectedComponentEntity;
+import org.apache.nifi.web.api.entity.ComponentEntity;
 import org.apache.nifi.web.api.entity.ControllerServiceEntity;
 import org.apache.nifi.web.api.entity.ControllerServicesEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
@@ -70,7 +71,7 @@ public class ClusterReplicationComponentLifecycle implements ComponentLifecycle 
             final ScheduledState desiredState, final Pause pause) throws LifecycleManagementException {
 
         final Set<String> componentIds = components.stream()
-            .map(component -> component.getId())
+            .map(ComponentEntity::getId)
             .collect(Collectors.toSet());
 
         final Map<String, AffectedComponentEntity> componentMap = components.stream()
@@ -150,7 +151,7 @@ public class ClusterReplicationComponentLifecycle implements ComponentLifecycle 
 
     private Map<String, Revision> getRevisions(final String groupId, final Set<String> componentIds) {
         final Set<Revision> processorRevisions = serviceFacade.getRevisionsFromGroup(groupId, group -> componentIds);
-        return processorRevisions.stream().collect(Collectors.toMap(revision -> revision.getComponentId(), Function.identity()));
+        return processorRevisions.stream().collect(Collectors.toMap(Revision::getComponentId, Function.identity()));
     }
 
     /**
@@ -281,7 +282,7 @@ public class ClusterReplicationComponentLifecycle implements ComponentLifecycle 
         final ControllerServiceState desiredState, final Pause pause) throws LifecycleManagementException {
 
         final Set<String> affectedServiceIds = affectedServices.stream()
-            .map(component -> component.getId())
+            .map(ComponentEntity::getId)
             .collect(Collectors.toSet());
 
         final Map<String, Revision> serviceRevisionMap = getRevisions(groupId, affectedServiceIds);

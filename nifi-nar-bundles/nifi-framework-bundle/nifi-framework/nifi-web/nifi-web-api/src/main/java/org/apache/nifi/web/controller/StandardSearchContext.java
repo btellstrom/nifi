@@ -16,8 +16,6 @@
  */
 package org.apache.nifi.web.controller;
 
-import java.util.Map;
-
 import org.apache.nifi.attribute.expression.language.StandardPropertyValue;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
@@ -25,6 +23,8 @@ import org.apache.nifi.controller.ControllerServiceLookup;
 import org.apache.nifi.controller.ProcessorNode;
 import org.apache.nifi.registry.VariableRegistry;
 import org.apache.nifi.search.SearchContext;
+
+import java.util.Map;
 
 /**
  *
@@ -55,13 +55,13 @@ public class StandardSearchContext implements SearchContext {
 
     @Override
     public PropertyValue getProperty(PropertyDescriptor property) {
-        final String configuredValue = processorNode.getProperty(property);
+        final String configuredValue = processorNode.getRawPropertyValue(property);
         return new StandardPropertyValue(configuredValue == null ? property.getDefaultValue() : configuredValue, controllerServiceLookup,variableRegistry);
     }
 
     @Override
     public Map<PropertyDescriptor, String> getProperties() {
-        return processorNode.getProperties();
+        return processorNode.getRawPropertyValues();
     }
 
 }

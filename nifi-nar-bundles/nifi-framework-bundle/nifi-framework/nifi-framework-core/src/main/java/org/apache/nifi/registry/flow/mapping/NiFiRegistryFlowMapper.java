@@ -336,7 +336,7 @@ public class NiFiRegistryFlowMapper {
         component.getProperties().keySet().stream()
             .filter(property -> !property.isSensitive())
             .forEach(property -> {
-                String value = component.getProperty(property);
+                String value = component.getEffectivePropertyValue(property);
                 if (value == null) {
                     value = property.getDefaultValue();
                 }

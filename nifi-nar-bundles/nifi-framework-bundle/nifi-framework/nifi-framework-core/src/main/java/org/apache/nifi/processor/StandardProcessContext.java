@@ -60,8 +60,10 @@ public class StandardProcessContext implements ProcessContext, ControllerService
         this.stateManager = stateManager;
         this.taskTermination = taskTermination;
 
+        properties = Collections.unmodifiableMap(processorNode.getEffectivePropertyValues());
+
         preparedQueries = new HashMap<>();
-        for (final Map.Entry<PropertyDescriptor, String> entry : procNode.getProperties().entrySet()) {
+        for (final Map.Entry<PropertyDescriptor, String> entry : properties.entrySet()) {
             final PropertyDescriptor desc = entry.getKey();
             String value = entry.getValue();
             if (value == null) {
@@ -73,8 +75,6 @@ public class StandardProcessContext implements ProcessContext, ControllerService
                 preparedQueries.put(desc, pq);
             }
         }
-
-        properties = Collections.unmodifiableMap(processorNode.getProperties());
     }
 
     private void verifyTaskActive() {

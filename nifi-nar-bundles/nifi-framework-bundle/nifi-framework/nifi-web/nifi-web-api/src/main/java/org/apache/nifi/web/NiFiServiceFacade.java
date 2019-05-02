@@ -51,6 +51,7 @@ import org.apache.nifi.web.api.dto.FunnelDTO;
 import org.apache.nifi.web.api.dto.LabelDTO;
 import org.apache.nifi.web.api.dto.ListingRequestDTO;
 import org.apache.nifi.web.api.dto.NodeDTO;
+import org.apache.nifi.web.api.dto.ParameterContextDTO;
 import org.apache.nifi.web.api.dto.PortDTO;
 import org.apache.nifi.web.api.dto.ProcessGroupDTO;
 import org.apache.nifi.web.api.dto.ProcessorDTO;
@@ -93,6 +94,7 @@ import org.apache.nifi.web.api.entity.FlowConfigurationEntity;
 import org.apache.nifi.web.api.entity.FlowEntity;
 import org.apache.nifi.web.api.entity.FunnelEntity;
 import org.apache.nifi.web.api.entity.LabelEntity;
+import org.apache.nifi.web.api.entity.ParameterContextEntity;
 import org.apache.nifi.web.api.entity.PortEntity;
 import org.apache.nifi.web.api.entity.PortStatusEntity;
 import org.apache.nifi.web.api.entity.ProcessGroupEntity;
@@ -996,6 +998,47 @@ public interface NiFiServiceFacade {
     Set<AffectedComponentDTO> getActiveComponentsAffectedByVariableRegistryUpdate(VariableRegistryDTO variableRegistryDto);
 
     /**
+     * Verifies that a Parameter Context matching the given DTO can be created
+     * @param parameterContext the DTO that represents the Parameter Context
+     * @throws IllegalStateException if a ParameterContext cannot be created for the given DTO
+     */
+    void verifyCreateParameterContext(ParameterContextDTO parameterContext);
+
+    /**
+     * Verifies that the Parameter Context with the ID identified by the given DTO can be updated to match
+     * the given set of Parameters
+     *
+     * @param parameterContext the DTO that represents the updated Parameter Context
+     * @param verifyComponentStates if <code>true</code>, will ensure that any processor referencing the parameter context is stopped/disabled and any controller service referencing the parameter
+     * context is disabled. If <code>false</code>, these verifications will not be performed.
+     */
+    void verifyUpdateParameterContext(ParameterContextDTO parameterContext, boolean verifyComponentStates);
+
+    /**
+     * Returns the ParameterContextEntity for the ParameterContext with the given ID
+     * @param parameterContextId the ID of the Parameter Context
+     * @param user the user on whose behalf the Parameter Context is being retrieved
+     * @return the ParameterContextEntity
+     */
+    ParameterContextEntity getParameterContext(String parameterContextId, NiFiUser user);
+
+    /**
+     * Creates a new Parameter Context
+     * @param revision the revision for the newly created Parameter Context
+     * @param parameterContext the Parameter Context
+     * @return a ParameterContextEntity representing the newly created ParameterContext
+     */
+    ParameterContextEntity createParameterContext(Revision revision, ParameterContextDTO parameterContext);
+
+    /**
+     * Updates the Parameter Context
+     * @param revision the current revision of the Parameter Context
+     * @param parameterContext the updated version of the ParameterContext
+     * @return the updated Parameter Context Entity
+     */
+    ParameterContextEntity updateParameterContext(Revision revision, ParameterContextDTO parameterContext);
+
+    /**
      * Gets all process groups in the specified parent group.
      *
      * @param parentGroupId The id of the parent group
@@ -1448,6 +1491,14 @@ public interface NiFiServiceFacade {
      */
     ProcessGroupEntity updateProcessGroupContents(Revision revision, String groupId, VersionControlInformationDTO versionControlInfo, VersionedFlowSnapshot snapshot,
                                                   String componentIdSeed, boolean verifyNotModified, boolean updateSettings, boolean updateDescendantVersionedFlows);
+
+    /**
+     * Returns a Set representing all components that will be affected by updating the Parameter Context that is represented by the given DTO.
+     *
+     * @param parameterContextDto the Parameter Context DTO that represents all changes that are to occur to a Parameter Context
+     * @return a Set representing all components that will be affected by the update
+     */
+    Set<AffectedComponentEntity> getComponentsAffectedByParameterContextUpdate(ParameterContextDTO parameterContextDto);
 
     // ----------------------------------------
     // Component state methods

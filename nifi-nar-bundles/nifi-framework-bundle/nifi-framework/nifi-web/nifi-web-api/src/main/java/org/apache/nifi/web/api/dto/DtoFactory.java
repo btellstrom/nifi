@@ -119,6 +119,8 @@ import org.apache.nifi.groups.RemoteProcessGroupCounts;
 import org.apache.nifi.history.History;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.nar.NarClassLoadersHolder;
+import org.apache.nifi.parameter.Parameter;
+import org.apache.nifi.parameter.ParameterDescriptor;
 import org.apache.nifi.processor.Processor;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.provenance.lineage.ComputeLineageResult;
@@ -127,6 +129,7 @@ import org.apache.nifi.provenance.lineage.LineageEdge;
 import org.apache.nifi.provenance.lineage.LineageNode;
 import org.apache.nifi.provenance.lineage.ProvenanceEventLineageNode;
 import org.apache.nifi.registry.ComponentVariableRegistry;
+import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.registry.flow.FlowRegistry;
 import org.apache.nifi.registry.flow.VersionControlInformation;
 import org.apache.nifi.registry.flow.VersionedComponent;
@@ -1353,6 +1356,31 @@ public final class DtoFactory {
         return dto;
     }
 
+    public ParameterContextDTO createParameterContextDto(final ParameterContext parameterContext) {
+        final ParameterContextDTO dto = new ParameterContextDTO();
+        dto.setId(parameterContext.getIdentifier());
+        dto.setName(parameterContext.getName());
+
+        final Set<ParameterDTO> parameterDtos = new LinkedHashSet<>();
+        for (final Parameter parameter : parameterContext.getParameters().values()) {
+            parameterDtos.add(createParameterDto(parameter));
+        }
+
+        dto.setParameters(parameterDtos);
+        return dto;
+    }
+
+    public ParameterDTO createParameterDto(final Parameter parameter) {
+        final ParameterDescriptor descriptor = parameter.getDescriptor();
+
+        final ParameterDTO dto = new ParameterDTO();
+        dto.setName(descriptor.getName());
+        dto.setDescription(descriptor.getDescription());
+        dto.setSensitive(descriptor.isSensitive());
+        dto.setValue(descriptor.isSensitive() ? SENSITIVE_VALUE_MASK : parameter.getValue());
+        return dto;
+    }
+
     public ReportingTaskDTO createReportingTaskDto(final ReportingTaskNode reportingTaskNode) {
         final BundleCoordinate bundleCoordinate = reportingTaskNode.getBundleCoordinate();
         final List<Bundle> compatibleBundles = extensionManager.getBundles(reportingTaskNode.getCanonicalClassName()).stream().filter(bundle -> {
@@ -1389,7 +1417,7 @@ public final class DtoFactory {
                 return Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName());
             }
         });
-        sortedProperties.putAll(reportingTaskNode.getProperties());
+        sortedProperties.putAll(reportingTaskNode.getRawPropertyValues());
 
         // get the property order from the reporting task
         final ReportingTask reportingTask = reportingTaskNode.getReportingTask();
@@ -1469,7 +1497,7 @@ public final class DtoFactory {
                 return Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName());
             }
         });
-        sortedProperties.putAll(controllerServiceNode.getProperties());
+        sortedProperties.putAll(controllerServiceNode.getRawPropertyValues());
 
         // get the property order from the controller service
         final ControllerService controllerService = controllerServiceNode.getControllerServiceImplementation();
@@ -1570,7 +1598,7 @@ public final class DtoFactory {
                 return Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName());
             }
         });
-        sortedProperties.putAll(component.getProperties());
+        sortedProperties.putAll(component.getRawPropertyValues());
 
         final Map<PropertyDescriptor, String> orderedProperties = new LinkedHashMap<>();
         for (final PropertyDescriptor descriptor : propertyDescriptors) {
@@ -2278,9 +2306,10 @@ public final class DtoFactory {
         dto.setName(group.getName());
         dto.setVersionedComponentId(group.getVersionedComponentId().orElse(null));
         dto.setVersionControlInformation(createVersionControlInformationDto(group));
+        dto.setParameterContextId(group.getParameterContext() == null ? null : group.getParameterContext().getIdentifier());
 
         final Map<String, String> variables = group.getVariableRegistry().getVariableMap().entrySet().stream()
-            .collect(Collectors.toMap(entry -> entry.getKey().getName(), entry -> entry.getValue()));
+            .collect(Collectors.toMap(entry -> entry.getKey().getName(), Entry::getValue));
         dto.setVariables(variables);
 
         final ProcessGroup parentGroup = group.getParent();
@@ -3284,7 +3313,7 @@ public final class DtoFactory {
         procDiagnostics.setProcessorStatus(createProcessorStatusDto(procStatus));
         procDiagnostics.setThreadDumps(createThreadDumpDtos(procNode));
 
-        final Set<ControllerServiceDiagnosticsDTO> referencedServiceDiagnostics = createReferencedServiceDiagnostics(procNode.getProperties(),
+        final Set<ControllerServiceDiagnosticsDTO> referencedServiceDiagnostics = createReferencedServiceDiagnostics(procNode.getEffectivePropertyValues(),
             flowController.getControllerServiceProvider(), serviceEntityFactory);
         procDiagnostics.setReferencedControllerServices(referencedServiceDiagnostics);
 
@@ -3636,7 +3665,7 @@ public final class DtoFactory {
                 return Collator.getInstance(Locale.US).compare(o1.getName(), o2.getName());
             }
         });
-        sortedProperties.putAll(procNode.getProperties());
+        sortedProperties.putAll(procNode.getRawPropertyValues());
 
         // get the property order from the processor
         final Processor processor = procNode.getProcessor();
@@ -4008,6 +4037,7 @@ public final class DtoFactory {
         copy.setInvalidCount(original.getInvalidCount());
         copy.setName(original.getName());
         copy.setVersionControlInformation(copy(original.getVersionControlInformation()));
+        copy.setParameterContextId(original.getParameterContextId());
         copy.setOutputPortCount(original.getOutputPortCount());
         copy.setParentGroupId(original.getParentGroupId());
         copy.setVersionedComponentId(original.getVersionedComponentId());

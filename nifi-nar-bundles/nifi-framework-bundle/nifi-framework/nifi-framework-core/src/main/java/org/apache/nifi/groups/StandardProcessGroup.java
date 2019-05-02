@@ -16,31 +16,6 @@
  */
 package org.apache.nifi.groups;
 
-import static java.util.Objects.requireNonNull;
-
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -72,6 +47,7 @@ import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.controller.ControllerService;
 import org.apache.nifi.controller.FlowController;
 import org.apache.nifi.controller.ProcessorNode;
+import org.apache.nifi.controller.PropertyConfiguration;
 import org.apache.nifi.controller.ScheduledState;
 import org.apache.nifi.controller.Snippet;
 import org.apache.nifi.controller.Template;
@@ -86,6 +62,7 @@ import org.apache.nifi.controller.scheduling.StandardProcessScheduler;
 import org.apache.nifi.controller.service.ControllerServiceNode;
 import org.apache.nifi.controller.service.ControllerServiceProvider;
 import org.apache.nifi.controller.service.ControllerServiceReference;
+import org.apache.nifi.controller.service.ControllerServiceState;
 import org.apache.nifi.controller.service.StandardConfigurationContext;
 import org.apache.nifi.encrypt.StringEncryptor;
 import org.apache.nifi.flowfile.FlowFilePrioritizer;
@@ -93,6 +70,9 @@ import org.apache.nifi.logging.LogLevel;
 import org.apache.nifi.logging.LogRepository;
 import org.apache.nifi.logging.LogRepositoryFactory;
 import org.apache.nifi.nar.NarCloseable;
+import org.apache.nifi.parameter.Parameter;
+import org.apache.nifi.parameter.ParameterContext;
+import org.apache.nifi.parameter.ParameterReference;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.StandardProcessContext;
 import org.apache.nifi.registry.ComponentVariableRegistry;
@@ -148,6 +128,33 @@ import org.apache.nifi.web.api.dto.TemplateDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import static java.util.Objects.requireNonNull;
+
 public final class StandardProcessGroup implements ProcessGroup {
 
     private final String id;
@@ -177,6 +184,7 @@ public final class StandardProcessGroup implements ProcessGroup {
     private final StringEncryptor encryptor;
     private final MutableVariableRegistry variableRegistry;
     private final VersionControlFields versionControlFields = new VersionControlFields();
+    private ParameterContext parameterContext; // guarded by read/write lock
 
     private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
     private final Lock readLock = rwLock.readLock();
@@ -856,7 +864,7 @@ public final class StandardProcessGroup implements ProcessGroup {
      * @param component the component whose invalid references should be removed
      */
     private void updateControllerServiceReferences(final ComponentNode component) {
-        for (final Map.Entry<PropertyDescriptor, String> entry : component.getProperties().entrySet()) {
+        for (final Map.Entry<PropertyDescriptor, String> entry : component.getEffectivePropertyValues().entrySet()) {
             final String serviceId = entry.getValue();
             if (serviceId == null) {
                 continue;
@@ -906,7 +914,7 @@ public final class StandardProcessGroup implements ProcessGroup {
                 throw new ComponentLifeCycleException("Failed to invoke 'OnRemoved' methods of processor with id " + processor.getIdentifier(), e);
             }
 
-            for (final Map.Entry<PropertyDescriptor, String> entry : processor.getProperties().entrySet()) {
+            for (final Map.Entry<PropertyDescriptor, String> entry : processor.getEffectivePropertyValues().entrySet()) {
                 final PropertyDescriptor descriptor = entry.getKey();
                 if (descriptor.getControllerServiceDefinition() != null) {
                     final String value = entry.getValue() == null ? descriptor.getDefaultValue() : entry.getValue();
@@ -1620,6 +1628,20 @@ public final class StandardProcessGroup implements ProcessGroup {
         return findAllProcessGroups(this);
     }
 
+    @Override
+    public List<ProcessGroup> findAllProcessGroups(final Predicate<ProcessGroup> filter) {
+        final List<ProcessGroup> matching = new ArrayList<>();
+        if (filter.test(this)) {
+            matching.add(this);
+        }
+
+        for (final ProcessGroup group : getProcessGroups()) {
+            matching.addAll(group.findAllProcessGroups(filter));
+        }
+
+        return matching;
+    }
+
     private List<ProcessGroup> findAllProcessGroups(final ProcessGroup start) {
         final List<ProcessGroup> allProcessGroups = new ArrayList<>(start.getProcessGroups());
         for (final ProcessGroup childGroup : start.getProcessGroups()) {
@@ -2108,7 +2130,7 @@ public final class StandardProcessGroup implements ProcessGroup {
                 ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnRemoved.class, service.getControllerServiceImplementation(), configurationContext);
             }
 
-            for (final Map.Entry<PropertyDescriptor, String> entry : service.getProperties().entrySet()) {
+            for (final Map.Entry<PropertyDescriptor, String> entry : service.getEffectivePropertyValues().entrySet()) {
                 final PropertyDescriptor descriptor = entry.getKey();
                 if (descriptor.getControllerServiceDefinition() != null) {
                     final String value = entry.getValue() == null ? descriptor.getDefaultValue() : entry.getValue();
@@ -2792,7 +2814,7 @@ public final class StandardProcessGroup implements ProcessGroup {
 
                     // if this descriptor identifies a controller service
                     if (serviceDefinition != null) {
-                        final String serviceId = processorNode.getProperty(descriptor);
+                        final String serviceId = processorNode.getEffectivePropertyValue(descriptor);
 
                         // if the processor is configured with a service
                         if (serviceId != null) {
@@ -2826,6 +2848,116 @@ public final class StandardProcessGroup implements ProcessGroup {
         }
 
         return processors;
+    }
+
+    @Override
+    public ParameterContext getParameterContext() {
+        readLock.lock();
+        try {
+            return parameterContext;
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public void setParameterContext(final ParameterContext parameterContext) {
+        writeLock.lock();
+        try {
+            verifyCanSetParameterContext(parameterContext);
+
+            this.parameterContext = parameterContext;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    @Override
+    public void onParameterContextUpdated() {
+        readLock.lock();
+        try {
+            for (final ProcessorNode processorNode : getProcessors()) {
+                if (processorNode.isReferencingParameter() && processorNode.getScheduledState() != ScheduledState.RUNNING) {
+                    processorNode.resetValidationState();
+                }
+            }
+
+            for (final ControllerServiceNode serviceNode : getControllerServices(false)) {
+                if (serviceNode.isReferencingParameter() && serviceNode.getState() == ControllerServiceState.DISABLING || serviceNode.getState() == ControllerServiceState.DISABLED) {
+                    serviceNode.resetValidationState();
+                }
+            }
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public void verifyCanSetParameterContext(final ParameterContext parameterContext) {
+        readLock.lock();
+        try {
+            for (final ProcessorNode processor : processors.values()) {
+                final boolean referencingParam = processor.isReferencingParameter();
+                if (!referencingParam) {
+                    continue;
+                }
+
+                if (processor.isRunning()) {
+                    throw new IllegalStateException("Cannot change Parameter Context for " + this + " because " + processor + " is referencing at least one Parameter and is running");
+                }
+
+                verifyParameterSensitivityIsValid(processor, parameterContext);
+            }
+
+            for (final ControllerServiceNode service : controllerServices.values()) {
+                final boolean referencingParam = service.isReferencingParameter();
+                if (!referencingParam) {
+                    continue;
+                }
+
+                if (service.getState() != ControllerServiceState.DISABLED) {
+                    throw new IllegalStateException("Cannot change Parameter Context for " + this + " because " + service + " is referencing at least one Parameter is is not disabled");
+                }
+
+                verifyParameterSensitivityIsValid(service, parameterContext);
+            }
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    private void verifyParameterSensitivityIsValid(final ComponentNode component, final ParameterContext parameterContext) {
+        if (parameterContext == null) {
+            return;
+        }
+
+        final Map<PropertyDescriptor, PropertyConfiguration> properties = component.getProperties();
+        for (final Map.Entry<PropertyDescriptor, PropertyConfiguration> entry : properties.entrySet()) {
+            final PropertyConfiguration configuration = entry.getValue();
+            if (configuration == null) {
+                continue;
+            }
+
+            for (final ParameterReference reference : configuration.getParameterReferences()) {
+                final Optional<String> paramName = reference.getParameterName();
+                if (!paramName.isPresent()) {
+                    continue;
+                }
+
+                final Parameter parameter = parameterContext.getParameter(paramName.get());
+                final PropertyDescriptor propertyDescriptor = entry.getKey();
+                if (parameter.getDescriptor().isSensitive() && !propertyDescriptor.isSensitive()) {
+                    throw new IllegalStateException("Cannot change Parameter Context for " + this + " because " + component + " is referencing Parameter '" + paramName.get()
+                        + "' from the '" + propertyDescriptor.getDisplayName() + "' property and the Parameter is sensitive. Sensitive Parameters may only be referenced " +
+                        "by sensitive properties.");
+                }
+                if (!parameter.getDescriptor().isSensitive() && propertyDescriptor.isSensitive()) {
+                    throw new IllegalStateException("Cannot change Parameter Context for " + this + " because " + component + " is referencing Parameter '" + paramName.get()
+                        + "' from a sensitive property and the Parameter is not sensitive. Sensitive properties may only reference " +
+                        "by Sensitive Parameters.");
+                }
+            }
+        }
     }
 
     @Override
@@ -2984,9 +3116,9 @@ public final class StandardProcessGroup implements ProcessGroup {
     }
 
     private List<VariableImpact> getVariableImpact(final ComponentNode component) {
-        return component.getProperties().keySet().stream()
+        return component.getEffectivePropertyValues().keySet().stream()
                 .map(descriptor -> {
-                    final String configuredVal = component.getProperty(descriptor);
+                    final String configuredVal = component.getEffectivePropertyValue(descriptor);
                     return configuredVal == null ? descriptor.getDefaultValue() : configuredVal;
                 })
                 .map(propVal -> Query.prepare(propVal).getVariableImpact())
@@ -4128,12 +4260,12 @@ public final class StandardProcessGroup implements ProcessGroup {
             service.setComments(proposed.getComments());
             service.setName(proposed.getName());
 
-            final Map<String, String> properties = populatePropertiesMap(service.getProperties(), proposed.getProperties(), proposed.getPropertyDescriptors(), service.getProcessGroup());
+            final Map<String, String> properties = populatePropertiesMap(service.getEffectivePropertyValues(), proposed.getProperties(), proposed.getPropertyDescriptors(), service.getProcessGroup());
             service.setProperties(properties, true);
 
             if (!isEqual(service.getBundleCoordinate(), proposed.getBundle())) {
                 final BundleCoordinate newBundleCoordinate = toCoordinate(proposed.getBundle());
-                final List<PropertyDescriptor> descriptors = new ArrayList<>(service.getProperties().keySet());
+                final List<PropertyDescriptor> descriptors = new ArrayList<>(service.getRawPropertyValues().keySet());
                 final Set<URL> additionalUrls = service.getAdditionalClasspathResources(descriptors);
                 flowController.getReloadComponent().reload(service, proposed.getType(), newBundleCoordinate, additionalUrls);
             }
@@ -4252,7 +4384,7 @@ public final class StandardProcessGroup implements ProcessGroup {
             processor.setName(proposed.getName());
             processor.setPenalizationPeriod(proposed.getPenaltyDuration());
 
-            final Map<String, String> properties = populatePropertiesMap(processor.getProperties(), proposed.getProperties(), proposed.getPropertyDescriptors(), processor.getProcessGroup());
+            final Map<String, String> properties = populatePropertiesMap(processor.getRawPropertyValues(), proposed.getProperties(), proposed.getPropertyDescriptors(), processor.getProcessGroup());
             processor.setProperties(properties, true);
             processor.setRunDuration(proposed.getRunDurationMillis(), TimeUnit.MILLISECONDS);
             processor.setSchedulingStrategy(SchedulingStrategy.valueOf(proposed.getSchedulingStrategy()));

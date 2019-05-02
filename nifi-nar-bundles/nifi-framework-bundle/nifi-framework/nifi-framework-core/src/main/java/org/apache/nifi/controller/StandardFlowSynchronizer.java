@@ -413,7 +413,7 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
                             if (group != null) {
                                 // find all the controller service ids referenced by reporting tasks
                                 final Set<String> controllerServicesInReportingTasks = reportingTaskNodesToDTOs.keySet().stream()
-                                        .flatMap(r -> r.getProperties().entrySet().stream())
+                                        .flatMap(r -> r.getEffectivePropertyValues().entrySet().stream())
                                         .filter(e -> e.getKey().getControllerServiceDefinition() != null)
                                         .map(Map.Entry::getValue)
                                         .collect(Collectors.toSet());
@@ -520,7 +520,7 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
             if (reportingTask.getProperties() != null) {
                 reportingTask.pauseValidationTrigger();
                 try {
-                    final Set<Map.Entry<PropertyDescriptor, String>> propertyDescriptors = reportingTask.getProperties().entrySet().stream()
+                    final Set<Map.Entry<PropertyDescriptor, String>> propertyDescriptors = reportingTask.getEffectivePropertyValues().entrySet().stream()
                             .filter(e -> e.getKey().getControllerServiceDefinition() != null)
                             .filter(e -> controllerServiceMapping.containsKey(e.getValue()))
                             .collect(Collectors.toSet());

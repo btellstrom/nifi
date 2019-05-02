@@ -832,7 +832,7 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
 
         @Override
         public String getValue(PropertyDescriptor propertyDescriptor) {
-            return processorNode.getProperty(propertyDescriptor);
+            return processorNode.getEffectivePropertyValue(propertyDescriptor);
         }
 
         @Override
@@ -880,7 +880,7 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
 
         @Override
         public String getValue(PropertyDescriptor propertyDescriptor) {
-            return controllerServiceNode.getProperty(propertyDescriptor);
+            return controllerServiceNode.getEffectivePropertyValue(propertyDescriptor);
         }
 
         @Override
@@ -928,7 +928,7 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
 
         @Override
         public String getValue(PropertyDescriptor propertyDescriptor) {
-            return reportingTaskNode.getProperty(propertyDescriptor);
+            return reportingTaskNode.getEffectivePropertyValue(propertyDescriptor);
         }
 
         @Override

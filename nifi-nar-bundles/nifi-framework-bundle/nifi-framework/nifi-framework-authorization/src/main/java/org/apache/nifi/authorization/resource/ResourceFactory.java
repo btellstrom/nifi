@@ -525,6 +525,9 @@ public final class ResourceFactory {
                     case Label:
                         componentType = "Label";
                         break;
+                    case ParameterContext:
+                        componentType = "Parameter Context";
+                        break;
                     default:
                         componentType = "Component";
                         break;

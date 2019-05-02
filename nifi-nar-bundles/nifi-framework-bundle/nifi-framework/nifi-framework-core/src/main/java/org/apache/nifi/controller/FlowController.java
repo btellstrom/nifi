@@ -137,6 +137,8 @@ import org.apache.nifi.groups.StandardProcessGroup;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.nar.NarCloseable;
 import org.apache.nifi.nar.NarThreadContextClassLoader;
+import org.apache.nifi.parameter.ParameterContextManager;
+import org.apache.nifi.parameter.StandardParameterContextManager;
 import org.apache.nifi.processor.Processor;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.provenance.ComponentIdentifierLookup;
@@ -294,6 +296,7 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
     private final ReloadComponent reloadComponent;
     private final ProvenanceAuthorizableFactory provenanceAuthorizableFactory;
     private final UserAwareEventAccess eventAccess;
+    private final ParameterContextManager parameterContextManager;
     private final StandardFlowManager flowManager;
     private final RepositoryContextFactory repositoryContextFactory;
 
@@ -486,8 +489,9 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         processScheduler = new StandardProcessScheduler(timerDrivenEngineRef.get(), this, encryptor, stateManagerProvider, this.nifiProperties);
         eventDrivenWorkerQueue = new EventDrivenWorkerQueue(false, false, processScheduler);
 
+        parameterContextManager = new StandardParameterContextManager();
         repositoryContextFactory = new RepositoryContextFactory(contentRepository, flowFileRepository, flowFileEventRepository, counterRepositoryRef.get(), provenanceRepository);
-        this.flowManager = new StandardFlowManager(nifiProperties, sslContext, this, flowFileEventRepository);
+        flowManager = new StandardFlowManager(nifiProperties, sslContext, this, flowFileEventRepository, parameterContextManager);
 
         controllerServiceProvider = new StandardControllerServiceProvider(this, processScheduler, bulletinRepository);
 

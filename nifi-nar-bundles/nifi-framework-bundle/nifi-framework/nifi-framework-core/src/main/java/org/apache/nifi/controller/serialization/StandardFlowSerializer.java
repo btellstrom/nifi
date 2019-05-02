@@ -464,7 +464,7 @@ public class StandardFlowSerializer implements FlowSerializer<Document> {
         addTextElement(element, "executionNode", processor.getExecutionNode().name());
         addTextElement(element, "runDurationNanos", processor.getRunDuration(TimeUnit.NANOSECONDS));
 
-        addConfiguration(element, processor.getProperties(), processor.getAnnotationData(), encryptor);
+        addConfiguration(element, processor.getRawPropertyValues(), processor.getAnnotationData(), encryptor);
 
         for (final Relationship rel : processor.getAutoTerminatedRelationships()) {
             addTextElement(element, "autoTerminatedRelationship", rel.getName());
@@ -477,12 +477,12 @@ public class StandardFlowSerializer implements FlowSerializer<Document> {
             final PropertyDescriptor descriptor = entry.getKey();
             String value = entry.getValue();
 
-            if (value != null && descriptor.isSensitive()) {
-                value = ENC_PREFIX + encryptor.encrypt(value) + ENC_SUFFIX;
-            }
-
             if (value == null) {
                 value = descriptor.getDefaultValue();
+            }
+
+            if (value != null && descriptor.isSensitive()) {
+                value = ENC_PREFIX + encryptor.encrypt(value) + ENC_SUFFIX;
             }
 
             final Element propElement = doc.createElement("property");
@@ -576,7 +576,7 @@ public class StandardFlowSerializer implements FlowSerializer<Document> {
         final boolean enabled = (state == ControllerServiceState.ENABLED || state == ControllerServiceState.ENABLING);
         addTextElement(serviceElement, "enabled", String.valueOf(enabled));
 
-        addConfiguration(serviceElement, serviceNode.getProperties(), serviceNode.getAnnotationData(), encryptor);
+        addConfiguration(serviceElement, serviceNode.getRawPropertyValues(), serviceNode.getAnnotationData(), encryptor);
 
         element.appendChild(serviceElement);
     }
@@ -594,7 +594,7 @@ public class StandardFlowSerializer implements FlowSerializer<Document> {
         addTextElement(taskElement, "scheduledState", taskNode.getScheduledState().name());
         addTextElement(taskElement, "schedulingStrategy", taskNode.getSchedulingStrategy().name());
 
-        addConfiguration(taskElement, taskNode.getProperties(), taskNode.getAnnotationData(), encryptor);
+        addConfiguration(taskElement, taskNode.getRawPropertyValues(), taskNode.getAnnotationData(), encryptor);
 
         element.appendChild(taskElement);
     }

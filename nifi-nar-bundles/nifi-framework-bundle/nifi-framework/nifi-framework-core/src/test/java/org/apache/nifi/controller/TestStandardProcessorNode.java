@@ -36,6 +36,7 @@ import org.apache.nifi.nar.ExtensionDiscoveringManager;
 import org.apache.nifi.nar.NarCloseable;
 import org.apache.nifi.nar.StandardExtensionDiscoveringManager;
 import org.apache.nifi.nar.SystemBundle;
+import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
@@ -63,6 +64,7 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -73,6 +75,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -176,6 +179,7 @@ public class TestStandardProcessorNode {
             extensionManager.removeInstanceClassLoader(procNode.getIdentifier());
         }
     }
+
 
     @Test
     public void testUpdateOtherPropertyDoesNotImpactClasspath() throws MalformedURLException {
@@ -467,7 +471,8 @@ public class TestStandardProcessorNode {
     private ValidationContextFactory createValidationContextFactory() {
         return new ValidationContextFactory() {
             @Override
-            public ValidationContext newValidationContext(Map<PropertyDescriptor, String> properties, String annotationData, String groupId, String componentId) {
+            public ValidationContext newValidationContext(Map<PropertyDescriptor, PropertyConfiguration> properties, String annotationData, String groupId, String componentId,
+                                                          ParameterContext context) {
                 return new ValidationContext() {
 
                     @Override
@@ -487,7 +492,7 @@ public class TestStandardProcessorNode {
 
                     @Override
                     public PropertyValue getProperty(PropertyDescriptor property) {
-                        return newPropertyValue(properties.get(property));
+                        return newPropertyValue(properties.get(property).getRawValue());
                     }
 
                     @Override
@@ -497,7 +502,8 @@ public class TestStandardProcessorNode {
 
                     @Override
                     public Map<PropertyDescriptor, String> getProperties() {
-                        return Collections.unmodifiableMap(properties);
+                        return properties.entrySet().stream()
+                            .collect(Collectors.toMap(entry -> entry.getKey(), entry -> entry.getValue().getRawValue()));
                     }
 
                     @Override
@@ -533,14 +539,19 @@ public class TestStandardProcessorNode {
                     public String getProcessGroupIdentifier() {
                         return groupId;
                     }
+
+                    @Override
+                    public Collection<String> getReferencedParameters(final String propertyName) {
+                        return Collections.emptyList();
+                    }
+
+                    @Override
+                    public boolean isParameterDefined(final String parameterName) {
+                        return false;
+                    }
                 };
             }
 
-            @Override
-            public ValidationContext newValidationContext(Set<String> serviceIdentifiersToNotValidate, Map<PropertyDescriptor, String> properties, String annotationData, String groupId,
-                String componentId) {
-                return newValidationContext(properties, annotationData, groupId, componentId);
-            }
         };
 
     }

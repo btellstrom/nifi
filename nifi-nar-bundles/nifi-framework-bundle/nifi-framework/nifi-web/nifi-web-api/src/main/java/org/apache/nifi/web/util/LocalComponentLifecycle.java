@@ -249,7 +249,7 @@ public class LocalComponentLifecycle implements ComponentLifecycle {
             return;
         }
 
-        for (final Map.Entry<PropertyDescriptor, String> entry : contextNode.getProperties().entrySet()) {
+        for (final Map.Entry<PropertyDescriptor, String> entry : contextNode.getEffectivePropertyValues().entrySet()) {
             if (entry.getKey().getControllerServiceDefinition() != null) {
                 final String referencedServiceId = entry.getValue();
                 if (referencedServiceId != null) {

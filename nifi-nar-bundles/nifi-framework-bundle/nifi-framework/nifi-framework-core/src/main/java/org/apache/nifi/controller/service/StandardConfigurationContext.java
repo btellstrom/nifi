@@ -59,7 +59,7 @@ public class StandardConfigurationContext implements ConfigurationContext {
         }
 
         preparedQueries = new HashMap<>();
-        for (final Map.Entry<PropertyDescriptor, String> entry : component.getProperties().entrySet()) {
+        for (final Map.Entry<PropertyDescriptor, String> entry : component.getEffectivePropertyValues().entrySet()) {
             final PropertyDescriptor desc = entry.getKey();
             String value = entry.getValue();
             if (value == null) {
@@ -73,7 +73,7 @@ public class StandardConfigurationContext implements ConfigurationContext {
 
     @Override
     public PropertyValue getProperty(final PropertyDescriptor property) {
-        final String configuredValue = component.getProperty(property);
+        final String configuredValue = component.getEffectivePropertyValue(property);
         final String resolvedValue = (configuredValue == null) ? property.getDefaultValue() : configuredValue;
 
         if (resolvedValue == null) {
@@ -89,7 +89,7 @@ public class StandardConfigurationContext implements ConfigurationContext {
 
     @Override
     public Map<PropertyDescriptor, String> getProperties() {
-        return component.getProperties();
+        return component.getEffectivePropertyValues();
     }
 
     @Override

@@ -58,6 +58,15 @@ public interface ComponentNode extends ComponentAuthorizable {
 
     public void setProperties(Map<String, String> properties, boolean allowRemovalOfRequiredProperties);
 
+    void verifyCanUpdateProperties(final Map<String, String> properties);
+
+    /**
+     * @return the Set of names of all Parameters that are referenced by this component
+     */
+    Set<String> getReferencedParameterNames();
+
+    boolean isReferencingParameter();
+
     /**
      * <p>
      * Pause triggering asynchronous validation to occur when the component is updated. Often times, it is necessary
@@ -91,9 +100,17 @@ public interface ComponentNode extends ComponentAuthorizable {
      */
     void resumeValidationTrigger();
 
-    public Map<PropertyDescriptor, String> getProperties();
+    Map<PropertyDescriptor, String> getRawPropertyValues();
 
-    public String getProperty(final PropertyDescriptor property);
+    Map<PropertyDescriptor, String> getEffectivePropertyValues();
+
+    PropertyConfiguration getProperty(PropertyDescriptor property);
+
+    String getEffectivePropertyValue(PropertyDescriptor property);
+
+    String getRawPropertyValue(PropertyDescriptor property);
+
+    Map<PropertyDescriptor, PropertyConfiguration> getProperties();
 
     void reload(Set<URL> additionalUrls) throws Exception;
 
@@ -114,6 +131,8 @@ public interface ComponentNode extends ComponentAuthorizable {
     void verifyCanUpdateBundle(BundleCoordinate bundleCoordinate) throws IllegalStateException;
 
     void reloadAdditionalResourcesIfNecessary();
+
+    void resetValidationState();
 
     /**
      * @return the any validation errors for this connectable

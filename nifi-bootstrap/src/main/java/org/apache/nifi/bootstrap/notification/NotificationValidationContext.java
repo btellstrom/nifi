@@ -16,11 +16,6 @@
  */
 package org.apache.nifi.bootstrap.notification;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.nifi.attribute.expression.language.Query;
 import org.apache.nifi.attribute.expression.language.Query.Range;
 import org.apache.nifi.attribute.expression.language.StandardExpressionLanguageCompiler;
@@ -32,6 +27,13 @@ import org.apache.nifi.controller.ControllerService;
 import org.apache.nifi.controller.ControllerServiceLookup;
 import org.apache.nifi.expression.ExpressionLanguageCompiler;
 import org.apache.nifi.registry.VariableRegistry;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class NotificationValidationContext implements ValidationContext {
     private final NotificationContext context;
@@ -119,5 +121,15 @@ public class NotificationValidationContext implements ValidationContext {
     @Override
     public String getProcessGroupIdentifier() {
         return null;
+    }
+
+    @Override
+    public Collection<String> getReferencedParameters(final String propertyName) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public boolean isParameterDefined(final String parameterName) {
+        return false;
     }
 }
