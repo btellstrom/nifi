@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class StandardParameterParser implements ParameterParser {
@@ -32,7 +33,7 @@ public class StandardParameterParser implements ParameterParser {
     @Override
     public ParameterReferences findReferences(final String input) {
         if (input == null || input.isEmpty()) {
-            return ParameterReferences.EMPTY;
+            return new ListParameterReferences(input, Collections.emptyList());
         }
 
         final List<ParameterReference> references = new ArrayList<>();
@@ -70,7 +71,7 @@ public class StandardParameterParser implements ParameterParser {
         }
 
         logger.debug("For input {} found {} Parameter references: {}", input, references.size(), references);
-        return references.isEmpty() ? ParameterReferences.EMPTY : new ListParameterReferences(references);
+        return new ListParameterReferences(input, references);
     }
 
 

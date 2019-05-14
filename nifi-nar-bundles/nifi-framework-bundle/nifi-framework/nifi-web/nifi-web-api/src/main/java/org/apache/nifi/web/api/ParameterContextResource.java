@@ -71,9 +71,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
-// TODO: Update FlowFromDOMFactory
-// TODO: Update FlowSynchronizer
-// TODO: Update Fingerprint
+
 // TODO: Add validation/verification
 // TODO: Replicate Request to update Parameter Context if clustered
 // TODO: Add Policies
@@ -83,7 +81,6 @@ import java.util.stream.Collectors;
 // TODO: Update Add endpoint for validating components with a given configuration
 // TODO: Templates
 // TODO: Test all of this in cluster
-// TODO: If processor referencing parameter but no context, do not throw Exception in setProperties() but instead just make processor invalid.
 
 @Path("/parameter-contexts")
 @Api(value = "/parameter-contexts", description = "Endpoint for managing version control for a flow")

@@ -19,20 +19,42 @@ package org.apache.nifi.parameter;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 public class ListParameterReferences implements ParameterReferences {
+    private final String input;
     private final List<ParameterReference> references;
 
-    public ListParameterReferences(final List<ParameterReference> references) {
+    public ListParameterReferences(final String input, final List<ParameterReference> references) {
+        this.input = input;
         this.references = references;
     }
 
     @Override
-    public String substitute(final String input, final ParameterContext parameterContext) {
+    public String substitute(final ParameterContext parameterContext) {
         if (references.isEmpty()) {
             return input;
         }
 
+        return substitute(reference -> reference.getValue(parameterContext));
+    }
+
+    @Override
+    public String escape() {
+        return substitute(reference -> {
+            if (reference.isEscapeSequence()) {
+                if (reference.getReferenceText().equals("##")) {
+                    return "####";
+                } else {
+                    return "##" + reference.getReferenceText();
+                }
+            } else {
+                return "#" + reference.getReferenceText();
+            }
+        });
+    }
+
+    private String substitute(final Function<ParameterReference, String> transform) {
         final StringBuilder sb = new StringBuilder();
 
         int lastEndOffset = -1;
@@ -40,7 +62,7 @@ public class ListParameterReferences implements ParameterReferences {
             final int startOffset = reference.getStartOffset();
 
             sb.append(input, lastEndOffset + 1, startOffset);
-            sb.append(reference.getValue(parameterContext));
+            sb.append(transform.apply(reference));
 
             lastEndOffset = reference.getEndOffset();
         }

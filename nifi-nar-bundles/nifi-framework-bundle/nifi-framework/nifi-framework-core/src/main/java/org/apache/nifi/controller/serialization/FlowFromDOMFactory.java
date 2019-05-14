@@ -521,10 +521,11 @@ public class FlowFromDOMFactory {
                 // Version 1.4 introduced the #{paramName} syntax for referencing parameters. If the version is less than 1.4, we must escpae any
                 // #{...} reference that we find.
                 final ParameterReferences parameterReferences = parameterParser.findReferences(value);
-                parameterReferences.substitute()
+                final String escaped = parameterReferences.escape();
+                properties.put(name, escaped);
+            } else {
+                properties.put(name, value);
             }
-
-            properties.put(name, value);
         }
 
         return properties;

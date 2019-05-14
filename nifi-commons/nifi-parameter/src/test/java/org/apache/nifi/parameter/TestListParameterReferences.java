@@ -35,13 +35,16 @@ public class TestListParameterReferences {
         Mockito.when(paramContext.getParameter("foo")).thenReturn(new Parameter(new ParameterDescriptor.Builder().name("foo").build(), "bar"));
         Mockito.when(paramContext.getParameter("bazz")).thenReturn(new Parameter(new ParameterDescriptor.Builder().name("bazz").build(), "baz"));
 
-        final ListParameterReferences references = new ListParameterReferences(referenceList);
-        assertEquals("bar", references.substitute("#{foo}", paramContext));
+        ListParameterReferences references = new ListParameterReferences("#{foo}", referenceList);
+        assertEquals("bar", references.substitute(paramContext));
 
         referenceList.add(new StandardParameterReference("bazz", 6, 12, "#{bazz}"));
-        assertEquals("barbaz", references.substitute("#{foo}#{bazz}", paramContext));
 
-        assertEquals("barbazHello, World!", references.substitute("#{foo}#{bazz}Hello, World!", paramContext));
+        references = new ListParameterReferences("#{foo}#{bazz}", referenceList);
+        assertEquals("barbaz", references.substitute(paramContext));
+
+        references = new ListParameterReferences("#{foo}#{bazz}Hello, World!", referenceList);
+        assertEquals("barbazHello, World!", references.substitute(paramContext));
 
         referenceList.clear();
         referenceList.add(new StandardParameterReference("foo", 0, 5, "#{foo}"));
@@ -53,9 +56,9 @@ public class TestListParameterReferences {
         referenceList.add(new StandardParameterReference("foo", 0, 5, "#{foo}"));
 
         final ParameterContext paramContext = Mockito.mock(ParameterContext.class);
-        final ListParameterReferences references = new ListParameterReferences(referenceList);
+        final ListParameterReferences references = new ListParameterReferences("#{foo}", referenceList);
 
-        assertEquals("#{foo}", references.substitute("#{foo}", paramContext));
+        assertEquals("#{foo}", references.substitute(paramContext));
     }
 
     @Test
@@ -67,11 +70,35 @@ public class TestListParameterReferences {
         final ParameterContext paramContext = Mockito.mock(ParameterContext.class);
         Mockito.when(paramContext.getParameter("foo")).thenReturn(new Parameter(new ParameterDescriptor.Builder().name("foo").build(), "bar"));
 
-        final ListParameterReferences references = new ListParameterReferences(referenceList);
-        assertEquals("##{foo}", references.substitute("####{foo}", paramContext));
+        ListParameterReferences references = new ListParameterReferences("####{foo}", referenceList);
+        assertEquals("##{foo}", references.substitute(paramContext));
 
         referenceList.add(new StandardParameterReference("foo", 12, 17, "#{foo}"));
-        assertEquals("##{foo}***bar", references.substitute("####{foo}***#{foo}", paramContext));
+        references = new ListParameterReferences("####{foo}***#{foo}", referenceList);
+        assertEquals("##{foo}***bar", references.substitute(paramContext));
+    }
 
+    @Test
+    public void testEscape() {
+        final List<ParameterReference> referenceList = new ArrayList<>();
+
+        assertEquals("Hello", new ListParameterReferences("Hello", referenceList).escape());
+
+        referenceList.add(new StandardParameterReference("abc", 0, 5, "#{abc}"));
+        assertEquals("##{abc}", new ListParameterReferences("#{abc}", referenceList).escape());
+
+        referenceList.clear();
+        referenceList.add(new EscapedParameterReference(0, 6, "##{abc}"));
+        assertEquals("####{abc}", new ListParameterReferences("##{abc}", referenceList).escape());
+
+        referenceList.clear();
+        referenceList.add(new StartCharacterEscape(0));
+        referenceList.add(new StandardParameterReference("abc", 2, 7, "#{abc}"));
+        assertEquals("######{abc}", new ListParameterReferences("###{abc}", referenceList).escape());
+
+        referenceList.clear();
+        referenceList.add(new StartCharacterEscape(0));
+        referenceList.add(new EscapedParameterReference(2, 8, "##{abc}"));
+        assertEquals("########{abc}", new ListParameterReferences("####{abc}", referenceList).escape());
     }
 }

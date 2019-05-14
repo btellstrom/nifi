@@ -276,15 +276,6 @@ public abstract class AbstractComponentNode implements ComponentNode {
 
             final PropertyDescriptor descriptor = getPropertyDescriptor(propertyName);
 
-            // TODO: Should we validate this here, or should we allow it to be set even without a Parameter Context set?
-            //  It's probably okay to allow it, since we do allow non-existent Parameters to be set...
-            // TODO: But when a Parameter Context is set, we need to first verify that it's legal based on sensitive props referencing only sensitive params, non-sensitive ref only non-sensitive
-            //  parms
-            if (!referenceList.isEmpty() && getParameterContext() == null) {
-                throw new IllegalStateException("The property '" + descriptor.getDisplayName() + "' cannot reference a Parameter because there is currently no Parameter Context set for this Process" +
-                    " Group");
-            }
-
             if (descriptor.isSensitive()) {
                 if (referenceList.size() > 1) {
                     throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference more than one Parameter because it is a sensitive property.");
@@ -297,17 +288,23 @@ public abstract class AbstractComponentNode implements ComponentNode {
                             "context around the value. For instance, the value '#{abc}' is allowed but 'password#{abc}' is not allowed.");
                     }
 
-                    final Parameter parameter = getParameterContext().getParameter(reference.getParameterName().get());
-                    if (parameter != null && !parameter.getDescriptor().isSensitive()) {
-                        throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' is a sensitive property, so it can only reference Parameters that are sensitive.");
+                    final ParameterContext parameterContext = getParameterContext();
+                    if (parameterContext != null) {
+                        final Parameter parameter = parameterContext.getParameter(reference.getParameterName().get());
+                        if (parameter != null && !parameter.getDescriptor().isSensitive()) {
+                            throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' is a sensitive property, so it can only reference Parameters that are sensitive.");
+                        }
                     }
                 }
             } else {
-                for (final ParameterReference reference : referenceList) {
-                    final Parameter parameter = getParameterContext().getParameter(reference.getParameterName().get());
-                    if (parameter != null && parameter.getDescriptor().isSensitive()) {
-                        throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference Parameter '" + parameter.getDescriptor().getName() + "' because " +
-                            "Sensitive Parameters may only be referenced by Sensitive Properties.");
+                final ParameterContext parameterContext = getParameterContext();
+                if (parameterContext != null) {
+                    for (final ParameterReference reference : referenceList) {
+                        final Parameter parameter = parameterContext.getParameter(reference.getParameterName().get());
+                        if (parameter != null && parameter.getDescriptor().isSensitive()) {
+                            throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference Parameter '" + parameter.getDescriptor().getName() + "' because " +
+                                "Sensitive Parameters may only be referenced by Sensitive Properties.");
+                        }
                     }
                 }
             }
@@ -587,7 +584,6 @@ public abstract class AbstractComponentNode implements ComponentNode {
             final Collection<ValidationResult> referencedServiceValidationResults = validateReferencedControllerServices(validationContext);
             validationResults.addAll(referencedServiceValidationResults);
 
-
             logger.debug("Computed validation errors with Validation Context {}; results = {}", validationContext, validationResults);
 
             return validationResults;
@@ -616,8 +612,21 @@ public abstract class AbstractComponentNode implements ComponentNode {
     private List<ValidationResult> validateParameterReferences(final ValidationContext validationContext) {
         final List<ValidationResult> results = new ArrayList<>();
 
+        final ParameterContext parameterContext = getParameterContext();
+
         for (final PropertyDescriptor propertyDescriptor : validationContext.getProperties().keySet()) {
             final Collection<String> referencedParameters = validationContext.getReferencedParameters(propertyDescriptor.getName());
+
+            if (parameterContext == null && !referencedParameters.isEmpty()) {
+                results.add(new ValidationResult.Builder()
+                    .subject(propertyDescriptor.getDisplayName())
+                    .valid(false)
+                    .explanation("Property references one or more Parameters but no Parameter Context is currently set on the Process Group")
+                    .build());
+
+                continue;
+            }
+
             for (final String paramName : referencedParameters) {
                 if (!validationContext.isParameterDefined(paramName)) {
                     results.add(new ValidationResult.Builder()

@@ -16,14 +16,16 @@
  */
 package org.apache.nifi.controller;
 
+import org.apache.nifi.parameter.ListParameterReferences;
 import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.parameter.ParameterReferences;
 
+import java.util.Collections;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class PropertyConfiguration {
-    public static PropertyConfiguration EMPTY = new PropertyConfiguration(null, ParameterReferences.EMPTY);
+    public static PropertyConfiguration EMPTY = new PropertyConfiguration(null, new ListParameterReferences(null, Collections.emptyList()));
 
     private final String rawValue;
     private final ParameterReferences parameterReferences;
@@ -55,7 +57,7 @@ public class PropertyConfiguration {
             return computedEffectiveValue.getValue();
         }
 
-        final String substituted = parameterReferences.substitute(rawValue, parameterContext);
+        final String substituted = parameterReferences.substitute(parameterContext);
         final ComputedEffectiveValue updatedValue = new ComputedEffectiveValue(parameterContext, substituted);
         effectiveValue.compareAndSet(computedEffectiveValue, updatedValue);
         return substituted;

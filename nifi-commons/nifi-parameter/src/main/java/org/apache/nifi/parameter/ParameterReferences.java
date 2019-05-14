@@ -16,32 +16,14 @@
  */
 package org.apache.nifi.parameter;
 
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 public interface ParameterReferences extends Iterable<ParameterReference> {
 
-    // TODO: This is weird. We shouldn't call substitute with the input, because this object is really only valid for the
-    //  input from which it was created. So it should just store the input and have a call to substitute(ParameterContext);
-    String substitute(String input, ParameterContext parameterContext);
+    String substitute(ParameterContext parameterContext);
+
+    String escape();
 
     List<ParameterReference> toReferenceList();
 
-    ParameterReferences EMPTY = new ParameterReferences() {
-        @Override
-        public Iterator<ParameterReference> iterator() {
-            return Collections.emptyIterator();
-        }
-
-        @Override
-        public String substitute(final String input, ParameterContext parameterContext) {
-            return input;
-        }
-
-        @Override
-        public List<ParameterReference> toReferenceList() {
-            return Collections.emptyList();
-        }
-    };
 }
