@@ -58,6 +58,10 @@ import org.apache.nifi.groups.RemoteProcessGroup;
 import org.apache.nifi.groups.RemoteProcessGroupPortDescriptor;
 import org.apache.nifi.logging.LogLevel;
 import org.apache.nifi.nar.ExtensionManager;
+import org.apache.nifi.parameter.Parameter;
+import org.apache.nifi.parameter.ParameterContext;
+import org.apache.nifi.parameter.ParameterContextManager;
+import org.apache.nifi.parameter.ParameterDescriptor;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.registry.flow.FlowRegistry;
 import org.apache.nifi.registry.flow.FlowRegistryClient;
@@ -81,6 +85,8 @@ import org.apache.nifi.web.api.dto.ControllerServiceDTO;
 import org.apache.nifi.web.api.dto.FlowSnippetDTO;
 import org.apache.nifi.web.api.dto.FunnelDTO;
 import org.apache.nifi.web.api.dto.LabelDTO;
+import org.apache.nifi.web.api.dto.ParameterContextDTO;
+import org.apache.nifi.web.api.dto.ParameterDTO;
 import org.apache.nifi.web.api.dto.PortDTO;
 import org.apache.nifi.web.api.dto.PositionDTO;
 import org.apache.nifi.web.api.dto.ProcessGroupDTO;
@@ -238,13 +244,23 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
                         registriesPresent = !flowRegistryElems.isEmpty();
                     }
 
+                    final boolean parametersPresent;
+                    final Element parameterContextsElement = DomUtils.getChild(rootElement, "parameterContexts");
+                    if (parameterContextsElement == null) {
+                        parametersPresent = false;
+                    } else {
+                        final List<Element> contextList = DomUtils.getChildElementsByTagName(parameterContextsElement, "parameterContext");
+                        parametersPresent = !contextList.isEmpty();
+                    }
+
                     logger.trace("Parsing process group from DOM");
                     final Element rootGroupElement = (Element) rootElement.getElementsByTagName("rootGroup").item(0);
                     final ProcessGroupDTO rootGroupDto = FlowFromDOMFactory.getProcessGroup(null, rootGroupElement, encryptor, encodingVersion);
                     existingFlowEmpty = taskElements.isEmpty()
                         && unrootedControllerServiceElements.isEmpty()
                         && isEmpty(rootGroupDto)
-                        && !registriesPresent;
+                        && !registriesPresent
+                        && !parametersPresent;
                     logger.debug("Existing Flow Empty = {}", existingFlowEmpty);
                 }
             }
@@ -353,7 +369,21 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
                                 client.addFlowRegistry(registryId, registryName, registryUrl, description);
                             }
                         }
+
+                        final Element parameterContextsElement = DomUtils.getChild(rootElement, "parameterContexts");
+                        if (parameterContextsElement != null) {
+                            final ParameterContextManager parameterContextManager = controller.getFlowManager().getParameterContextManager();
+
+                            final List<Element> contextElements = DomUtils.getChildElementsByTagName(parameterContextsElement, "parameterContext");
+                            for (final Element contextElement : contextElements) {
+                                final ParameterContextDTO parameterContextDto = FlowFromDOMFactory.getParameterContext(contextElement, encryptor);
+                                parameterContextManager.addParameterContext(createParameterContext(parameterContextDto, controller.getFlowManager()));
+                            }
+                        }
                     }
+
+                    // TODO: unescape properties if not encoding version 1.4
+                    // TODO: Fingerprint
 
                     // if this controller isn't initialized or its empty, add the root group, otherwise update
                     final ProcessGroup rootGroup;
@@ -513,6 +543,24 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
                 return false;
             }
         }
+    }
+
+    private ParameterContext createParameterContext(final ParameterContextDTO dto, final FlowManager flowManager) {
+        final Set<Parameter> parameters = dto.getParameters().stream()
+            .map(this::createParameter)
+            .collect(Collectors.toSet());
+
+        return flowManager.createParameterContext(dto.getId(), dto.getName(), parameters);
+    }
+
+    private Parameter createParameter(final ParameterDTO dto) {
+        final ParameterDescriptor parameterDescriptor = new ParameterDescriptor.Builder()
+            .name(dto.getName())
+            .description(dto.getDescription())
+            .sensitive(Boolean.TRUE.equals(dto.getSensitive()))
+            .build();
+
+        return new Parameter(parameterDescriptor, dto.getValue());
     }
 
     private void updateReportingTaskControllerServices(final Set<ReportingTaskNode> reportingTasks, final Map<String, ControllerServiceNode> controllerServiceMapping) {
@@ -786,15 +834,19 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
         }
 
         // update the process group
-        final ProcessGroup group = flowManager.getGroup(processGroupDto.getId());
-        if (group == null) {
+        final ProcessGroup processGroup = flowManager.getGroup(processGroupDto.getId());
+        if (processGroup == null) {
             throw new IllegalStateException("No Group with ID " + processGroupDto.getId() + " exists");
         }
 
-        updateProcessGroup(group, processGroupDto);
+        updateProcessGroup(processGroup, processGroupDto);
 
-        // get the real process group and ID
-        final ProcessGroup processGroup = flowManager.getGroup(processGroupDto.getId());
+        final String parameterContextId = getString(processGroupElement, "parameterContextId");
+        if (parameterContextId != null) {
+            final ParameterContext parameterContext = controller.getFlowManager().getParameterContextManager().getParameterContext(parameterContextId);
+            processGroup.setParameterContext(parameterContext);
+        }
+
 
         // determine the scheduled state of all of the Controller Service
         final List<Element> controllerServiceNodeList = getChildrenByTagName(processGroupElement, "controllerService");
@@ -1203,6 +1255,12 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
             controller.setRootGroup(processGroup);
         } else {
             parentGroup.addProcessGroup(processGroup);
+        }
+
+        final String parameterContextId = getString(processGroupElement, "parameterContextId");
+        if (parameterContextId != null) {
+            final ParameterContext parameterContext = controller.getFlowManager().getParameterContextManager().getParameterContext(parameterContextId);
+            processGroup.setParameterContext(parameterContext);
         }
 
         // Set the variables for the variable registry
