@@ -14,12 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.web.api.dto;
 
 import javax.xml.bind.annotation.XmlType;
 
-@XmlType(name = "varaibleRegistryUpdateStep")
-public class VariableRegistryUpdateStepDTO extends UpdateStepDTO {
-
+@XmlType(name = "parameterContextValidationStep")
+public class ParameterContextValidationStepDTO extends UpdateStepDTO {
 }

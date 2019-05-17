@@ -237,6 +237,8 @@
             <xs:element name="connection" type="ConnectionType" minOccurs="0" maxOccurs="unbounded" />
             <xs:element name="controllerService" type="ControllerServiceType" minOccurs="0" maxOccurs="unbounded" />
             <xs:element name="template" type="TemplateType" minOccurs="0" maxOccurs="unbounded" />
+            <xs:element name="variable" type="VariableType" minOccurs="0" maxOccurs="unbounded"  />
+            <xs:element name="parameterContextId" type="xs:string" minOccurs="0" maxOccurs="1" />
         </xs:sequence>
     </xs:complexType>
 

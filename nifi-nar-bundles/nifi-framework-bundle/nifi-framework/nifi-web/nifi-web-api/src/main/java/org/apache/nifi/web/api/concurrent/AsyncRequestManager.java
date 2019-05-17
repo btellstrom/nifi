@@ -92,7 +92,7 @@ public class AsyncRequestManager<T> implements RequestManager<T> {
             .map(Map.Entry::getKey)
             .collect(Collectors.toList());
 
-        completedRequestIds.stream().forEach(id -> requests.remove(id));
+        completedRequestIds.forEach(requests::remove);
 
         final int requestCount = requests.size();
         if (requestCount > maxConcurrentRequests) {

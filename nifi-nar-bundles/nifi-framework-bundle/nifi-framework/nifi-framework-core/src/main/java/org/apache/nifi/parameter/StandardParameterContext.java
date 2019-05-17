@@ -223,6 +223,10 @@ public class StandardParameterContext implements ParameterContext {
 
         for (final Map.Entry<PropertyDescriptor, PropertyConfiguration> entry :  componentNode.getProperties().entrySet()) {
             final PropertyConfiguration configuration = entry.getValue();
+            if (configuration == null) {
+                continue;
+            }
+
             for (final ParameterReference reference : configuration.getParameterReferences()) {
                 if (!reference.getParameterName().isPresent()) {
                     continue;

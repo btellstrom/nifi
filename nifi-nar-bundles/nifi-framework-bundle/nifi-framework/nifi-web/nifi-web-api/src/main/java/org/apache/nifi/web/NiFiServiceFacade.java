@@ -94,6 +94,7 @@ import org.apache.nifi.web.api.entity.FlowConfigurationEntity;
 import org.apache.nifi.web.api.entity.FlowEntity;
 import org.apache.nifi.web.api.entity.FunnelEntity;
 import org.apache.nifi.web.api.entity.LabelEntity;
+import org.apache.nifi.web.api.entity.ComponentValidationResultEntity;
 import org.apache.nifi.web.api.entity.ParameterContextEntity;
 import org.apache.nifi.web.api.entity.PortEntity;
 import org.apache.nifi.web.api.entity.PortStatusEntity;
@@ -1037,6 +1038,28 @@ public interface NiFiServiceFacade {
      * @return the updated Parameter Context Entity
      */
     ParameterContextEntity updateParameterContext(Revision revision, ParameterContextDTO parameterContext);
+
+    /**
+     * Deletes the Parameter Context
+     * @param revision the revision of the Parameter Context
+     * @param parameterContextId the ID of the Parameter Context
+     * @return a Parameter Context Entity that represents the Parameter Context that was deleted
+     */
+    ParameterContextEntity deleteParameterContext(Revision revision, String parameterContextId);
+
+    /**
+     * Performs validation of all components that make use of the Parameter Context with the same ID as the given DTO, but validating against the Parameters
+     * specified within the DTO
+     * @param parameterContext the ParameterContext to validate against
+     * @return the ComponentValidationResultEntity for each component that makes use of the Parameter Context
+     */
+    List<ComponentValidationResultEntity> validateComponents(ParameterContextDTO parameterContext);
+
+    /**
+     * Ensures that the Parameter Context with the given ID can be deleted
+     * @param parameterContextId the ID of the Parameter Context
+     */
+    void verifyDeleteParameterContext(String parameterContextId);
 
     /**
      * Gets all process groups in the specified parent group.

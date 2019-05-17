@@ -896,18 +896,18 @@ public class VersionsResource extends ApplicationResource {
         updateRequestDto.setComplete(asyncRequest.isComplete());
         updateRequestDto.setFailureReason(asyncRequest.getFailureReason());
         updateRequestDto.setLastUpdated(asyncRequest.getLastUpdated());
-        updateRequestDto.setProcessGroupId(asyncRequest.getProcessGroupId());
+        updateRequestDto.setProcessGroupId(asyncRequest.getComponentId());
         updateRequestDto.setRequestId(requestId);
         updateRequestDto.setUri(generateResourceUri("versions", requestType, requestId));
         updateRequestDto.setState(asyncRequest.getState());
         updateRequestDto.setPercentCompleted(asyncRequest.getPercentComplete());
 
         if (updateRequestDto.isComplete()) {
-            final VersionControlInformationEntity vciEntity = serviceFacade.getVersionControlInformation(asyncRequest.getProcessGroupId());
+            final VersionControlInformationEntity vciEntity = serviceFacade.getVersionControlInformation(asyncRequest.getComponentId());
             updateRequestDto.setVersionControlInformation(vciEntity == null ? null : vciEntity.getVersionControlInformation());
         }
 
-        final RevisionDTO groupRevision = serviceFacade.getProcessGroup(asyncRequest.getProcessGroupId()).getRevision();
+        final RevisionDTO groupRevision = serviceFacade.getProcessGroup(asyncRequest.getComponentId()).getRevision();
 
         final VersionedFlowUpdateRequestEntity updateRequestEntity = new VersionedFlowUpdateRequestEntity();
         updateRequestEntity.setProcessGroupRevision(groupRevision);
@@ -1006,18 +1006,18 @@ public class VersionsResource extends ApplicationResource {
         updateRequestDto.setComplete(asyncRequest.isComplete());
         updateRequestDto.setFailureReason(asyncRequest.getFailureReason());
         updateRequestDto.setLastUpdated(asyncRequest.getLastUpdated());
-        updateRequestDto.setProcessGroupId(asyncRequest.getProcessGroupId());
+        updateRequestDto.setProcessGroupId(asyncRequest.getComponentId());
         updateRequestDto.setRequestId(requestId);
         updateRequestDto.setUri(generateResourceUri("versions", requestType, requestId));
         updateRequestDto.setPercentCompleted(asyncRequest.getPercentComplete());
         updateRequestDto.setState(asyncRequest.getState());
 
         if (updateRequestDto.isComplete()) {
-            final VersionControlInformationEntity vciEntity = serviceFacade.getVersionControlInformation(asyncRequest.getProcessGroupId());
+            final VersionControlInformationEntity vciEntity = serviceFacade.getVersionControlInformation(asyncRequest.getComponentId());
             updateRequestDto.setVersionControlInformation(vciEntity == null ? null : vciEntity.getVersionControlInformation());
         }
 
-        final RevisionDTO groupRevision = serviceFacade.getProcessGroup(asyncRequest.getProcessGroupId()).getRevision();
+        final RevisionDTO groupRevision = serviceFacade.getProcessGroup(asyncRequest.getComponentId()).getRevision();
 
         final VersionedFlowUpdateRequestEntity updateRequestEntity = new VersionedFlowUpdateRequestEntity();
         updateRequestEntity.setProcessGroupRevision(groupRevision);

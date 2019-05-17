@@ -547,21 +547,33 @@ public abstract class AbstractComponentNode implements ComponentNode {
     }
 
     @Override
+    public ValidationState performValidation(final Map<PropertyDescriptor, PropertyConfiguration> properties, final String annotationData, final ParameterContext parameterContext) {
+        final ValidationContext validationContext = validationContextFactory.newValidationContext(properties, annotationData, getProcessGroupIdentifier(), getIdentifier(), parameterContext);
+        return performValidation(validationContext);
+    }
+
+    @Override
+    public ValidationState performValidation(final ValidationContext validationContext) {
+        final Collection<ValidationResult> results;
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(extensionManager, getComponent().getClass(), getIdentifier())) {
+            results = computeValidationErrors(validationContext);
+        }
+
+        final ValidationStatus status = results.isEmpty() ? ValidationStatus.VALID : ValidationStatus.INVALID;
+        final ValidationState validationState = new ValidationState(status, results);
+        return validationState;
+    }
+
+    @Override
     public final ValidationStatus performValidation() {
         while (true) {
             final ValidationState validationState = getValidationState();
 
             final ValidationContext validationContext = getValidationContext();
-            final Collection<ValidationResult> results;
-            try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(extensionManager, getComponent().getClass(), getIdentifier())) {
-                results = computeValidationErrors(validationContext);
-            }
-
-            final ValidationStatus status = results.isEmpty() ? ValidationStatus.VALID : ValidationStatus.INVALID;
-            final ValidationState updatedState = new ValidationState(status, results);
+            final ValidationState updatedState = performValidation(validationContext);
             final boolean replaced = replaceValidationState(validationState, updatedState);
             if (replaced) {
-                return status;
+                return updatedState.getStatus();
             }
         }
     }

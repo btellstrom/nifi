@@ -63,6 +63,7 @@ import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.components.state.Scope;
 import org.apache.nifi.components.state.StateMap;
+import org.apache.nifi.components.validation.ValidationState;
 import org.apache.nifi.connectable.Connectable;
 import org.apache.nifi.connectable.Connection;
 import org.apache.nifi.connectable.Funnel;
@@ -91,7 +92,11 @@ import org.apache.nifi.groups.RemoteProcessGroup;
 import org.apache.nifi.history.History;
 import org.apache.nifi.history.HistoryQuery;
 import org.apache.nifi.history.PreviousValue;
+import org.apache.nifi.parameter.Parameter;
 import org.apache.nifi.parameter.ParameterContext;
+import org.apache.nifi.parameter.ParameterDescriptor;
+import org.apache.nifi.parameter.ParameterReferenceManager;
+import org.apache.nifi.parameter.StandardParameterContext;
 import org.apache.nifi.registry.ComponentVariableRegistry;
 import org.apache.nifi.registry.authorization.Permissions;
 import org.apache.nifi.registry.bucket.Bucket;
@@ -146,6 +151,7 @@ import org.apache.nifi.web.api.dto.ComponentHistoryDTO;
 import org.apache.nifi.web.api.dto.ComponentReferenceDTO;
 import org.apache.nifi.web.api.dto.ComponentRestrictionPermissionDTO;
 import org.apache.nifi.web.api.dto.ComponentStateDTO;
+import org.apache.nifi.web.api.dto.ComponentValidationResultDTO;
 import org.apache.nifi.web.api.dto.ConnectionDTO;
 import org.apache.nifi.web.api.dto.ControllerConfigurationDTO;
 import org.apache.nifi.web.api.dto.ControllerDTO;
@@ -166,6 +172,7 @@ import org.apache.nifi.web.api.dto.LabelDTO;
 import org.apache.nifi.web.api.dto.ListingRequestDTO;
 import org.apache.nifi.web.api.dto.NodeDTO;
 import org.apache.nifi.web.api.dto.ParameterContextDTO;
+import org.apache.nifi.web.api.dto.ParameterDTO;
 import org.apache.nifi.web.api.dto.PermissionsDTO;
 import org.apache.nifi.web.api.dto.PortDTO;
 import org.apache.nifi.web.api.dto.PreviousValueDTO;
@@ -219,6 +226,7 @@ import org.apache.nifi.web.api.entity.AffectedComponentEntity;
 import org.apache.nifi.web.api.entity.BucketEntity;
 import org.apache.nifi.web.api.entity.BulletinEntity;
 import org.apache.nifi.web.api.entity.ComponentReferenceEntity;
+import org.apache.nifi.web.api.entity.ComponentValidationResultEntity;
 import org.apache.nifi.web.api.entity.ConnectionEntity;
 import org.apache.nifi.web.api.entity.ConnectionStatusEntity;
 import org.apache.nifi.web.api.entity.ControllerBulletinsEntity;
@@ -991,7 +999,7 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         final RevisionUpdate<ParameterContextDTO> snapshot = updateComponent(revision,
             parameterContext,
             () -> parameterContextDAO.updateParameterContext(parameterContextDto),
-            dtoFactory::createParameterContextDto);
+            context -> dtoFactory.createParameterContextDto(context, parameterContextDAO.getParameterReferenceManager(), revisionManager));
 
         final PermissionsDTO permissions = dtoFactory.createPermissionsDto(parameterContext);
         final RevisionDTO revisionDto = dtoFactory.createRevisionDTO(snapshot.getLastModification());
@@ -1004,9 +1012,66 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         final ParameterContext parameterContext = parameterContextDAO.getParameterContext(parameterContextId);
         final PermissionsDTO permissions = dtoFactory.createPermissionsDto(parameterContext);
         final RevisionDTO revisionDto = dtoFactory.createRevisionDTO(revisionManager.getRevision(parameterContextId));
-        final ParameterContextDTO parameterContextDto = dtoFactory.createParameterContextDto(parameterContext);
+        final ParameterContextDTO parameterContextDto = dtoFactory.createParameterContextDto(parameterContext, parameterContextDAO.getParameterReferenceManager(), revisionManager);
         final ParameterContextEntity entity = entityFactory.createParameterContextEntity(parameterContextDto, revisionDto, permissions);
         return entity;
+    }
+
+    @Override
+    public List<ComponentValidationResultEntity> validateComponents(final ParameterContextDTO parameterContextDto) {
+        final ParameterContext parameterContext = parameterContextDAO.getParameterContext(parameterContextDto.getId());
+        final Set<ProcessGroup> boundProcessGroups = parameterContextDAO.getParameterReferenceManager().getProcessGroupsBound(parameterContext);
+
+        final ParameterContext updatedParameterContext = new StandardParameterContext(parameterContext.getIdentifier(), parameterContext.getName(), ParameterReferenceManager.EMPTY);
+        final Set<Parameter> parameters = parameterContextDto.getParameters().stream()
+            .map(this::createParameter)
+            .collect(Collectors.toSet());
+        updatedParameterContext.setParameters(parameters);
+
+        final List<ComponentValidationResultEntity> validationResults = new ArrayList<>();
+        for (final ProcessGroup processGroup : boundProcessGroups) {
+            for (final ProcessorNode processorNode : processGroup.getProcessors()) {
+                if (!processorNode.isReferencingParameter()) {
+                    continue;
+                }
+
+                final ComponentValidationResultEntity componentValidationResultEntity = validateComponent(processorNode, updatedParameterContext);
+                validationResults.add(componentValidationResultEntity);
+            }
+
+            for (final ControllerServiceNode serviceNode : processGroup.getControllerServices(false)) {
+                if (!serviceNode.isReferencingParameter()) {
+                    continue;
+                }
+
+                final ComponentValidationResultEntity componentValidationResultEntity = validateComponent(serviceNode, updatedParameterContext);
+                validationResults.add(componentValidationResultEntity);
+            }
+        }
+
+        return validationResults;
+    }
+
+    private ComponentValidationResultEntity validateComponent(final ComponentNode componentNode, final ParameterContext parameterContext) {
+        final ValidationState newState = componentNode.performValidation(componentNode.getProperties(), componentNode.getAnnotationData(), parameterContext);
+        final ComponentValidationResultDTO resultDto = dtoFactory.createComponentValidationResultDto(componentNode, newState);
+
+        final Revision revision = revisionManager.getRevision(componentNode.getIdentifier());
+        final PermissionsDTO permissions = dtoFactory.createPermissionsDto(componentNode);
+        final RevisionDTO revisionDto = dtoFactory.createRevisionDTO(revision);
+
+        final ComponentValidationResultEntity componentValidationResultEntity = entityFactory.createComponentValidationResultEntity(resultDto, revisionDto, permissions);
+        return componentValidationResultEntity;
+    }
+
+    private Parameter createParameter(final ParameterDTO dto) {
+        final ParameterDescriptor descriptor = new ParameterDescriptor.Builder()
+            .name(dto.getName())
+            .description(dto.getDescription())
+            .sensitive(Boolean.TRUE.equals(dto.getSensitive()))
+            .build();
+
+        return new Parameter(descriptor, dto.getValue());
     }
 
     @Override
@@ -1024,7 +1089,7 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
             // save the update
             controllerFacade.save();
 
-            final ParameterContextDTO dto = dtoFactory.createParameterContextDto(parameterContext);
+            final ParameterContextDTO dto = dtoFactory.createParameterContextDto(parameterContext, parameterContextDAO.getParameterReferenceManager(), revisionManager);
             final FlowModification lastMod = new FlowModification(revision.incrementRevision(revision.getClientId()), user.getIdentity());
             return new StandardRevisionUpdate<>(dto, lastMod);
         });
@@ -1033,6 +1098,26 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         final PermissionsDTO permissions = dtoFactory.createPermissionsDto(parameterContext);
 
         return entityFactory.createParameterContextEntity(snapshot.getComponent(), dtoFactory.createRevisionDTO(snapshot.getLastModification()), permissions);
+    }
+
+    @Override
+    public void verifyDeleteParameterContext(final String parameterContextId) {
+        parameterContextDAO.verifyDelete(parameterContextId);
+    }
+
+    @Override
+    public ParameterContextEntity deleteParameterContext(final Revision revision, final String parameterContextId) {
+        final ParameterContext parameterContext = parameterContextDAO.getParameterContext(parameterContextId);
+        final PermissionsDTO permissions = dtoFactory.createPermissionsDto(parameterContext);
+        final ParameterContextDTO snapshot = deleteComponent(
+            revision,
+            parameterContext.getResource(),
+            () -> parameterContextDAO.deleteParameterContext(parameterContextId),
+            true,
+            dtoFactory.createParameterContextDto(parameterContext, parameterContextDAO.getParameterReferenceManager(), revisionManager));
+
+        return entityFactory.createParameterContextEntity(snapshot, null, permissions);
+
     }
 
     @Override

@@ -16,17 +16,31 @@
  */
 package org.apache.nifi.web.dao.impl;
 
+import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.controller.ComponentNode;
 import org.apache.nifi.controller.FlowController;
+import org.apache.nifi.controller.ProcessorNode;
+import org.apache.nifi.controller.PropertyConfiguration;
 import org.apache.nifi.controller.flow.FlowManager;
+import org.apache.nifi.controller.service.ControllerServiceNode;
+import org.apache.nifi.controller.service.ControllerServiceState;
+import org.apache.nifi.groups.ProcessGroup;
 import org.apache.nifi.parameter.Parameter;
 import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.parameter.ParameterDescriptor;
+import org.apache.nifi.parameter.ParameterReference;
+import org.apache.nifi.parameter.ParameterReferenceManager;
+import org.apache.nifi.parameter.StandardParameterReferenceManager;
 import org.apache.nifi.web.ResourceNotFoundException;
 import org.apache.nifi.web.api.dto.ParameterContextDTO;
 import org.apache.nifi.web.api.dto.ParameterDTO;
 import org.apache.nifi.web.dao.ParameterContextDAO;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +55,11 @@ public class StandardParameterContextDAO implements ParameterContextDAO {
     @Override
     public void verifyCreate(final ParameterContextDTO parameterContextDto) {
         verifyNoNamingConflict(parameterContextDto.getName());
+    }
+
+    @Override
+    public ParameterReferenceManager getParameterReferenceManager() {
+        return new StandardParameterReferenceManager(flowManager);
     }
 
     @Override
@@ -115,8 +134,63 @@ public class StandardParameterContextDAO implements ParameterContextDAO {
     public void verifyUpdate(final ParameterContextDTO parameterContextDto, final boolean verifyComponentStates) {
         verifyNoNamingConflict(parameterContextDto.getName());
 
-        // TODO: Need to verify that the updates are valid/legal
-        // TODO: In some cases, need to verify that no active components are referencing the Parameter Context.
+        final ParameterReferenceManager parameterReferenceManager = new StandardParameterReferenceManager(flowManager);
+
+        final ParameterContext currentContext = getParameterContext(parameterContextDto.getId());
+        for (final ParameterDTO parameterDto : parameterContextDto.getParameters()) {
+            final String parameterName = parameterDto.getName();
+            final Parameter currentParameter = currentContext.getParameter(parameterName);
+            final boolean parameterValueModified = currentParameter == null || !Objects.equals(currentParameter.getValue(), parameterDto.getValue());
+
+            if (parameterValueModified) {
+                for (final ProcessorNode processor : parameterReferenceManager.getProcessorsReferencing(currentContext, parameterName)) {
+                    verifyParameterUpdate(parameterName, processor, parameterDto.getSensitive(), currentContext.getName(), verifyComponentStates, processor.isRunning(), "Processor that is running");
+                }
+
+                for (final ControllerServiceNode serviceNode : parameterReferenceManager.getControllerServicesReferencing(currentContext, parameterName)) {
+                    verifyParameterUpdate(parameterName, serviceNode, parameterDto.getSensitive(), currentContext.getName(), verifyComponentStates,
+                        serviceNode.getState() != ControllerServiceState.DISABLED, "Controller Service that is enabled");
+                }
+            }
+        }
+    }
+
+    private void verifyParameterUpdate(final String parameterName, final ComponentNode component, final Boolean parameterSensitive, final String contextName,
+                                            final boolean verifyComponentStates, final boolean active, final String activeExplanation) {
+        // For any parameter that is added or modified, we need to ensure that the new configuration will not result in a Sensitive Parameter being referenced by a non-Sensitive Property
+        // or a Non-Sensitive Parameter being referenced by a Sensitive Property.
+        // Additionally, if 'verifyComponentStates', we must ensure that any component that references a value that is to be updated is stopped (if a processor) or disabled (if a controller service)
+        for (final Map.Entry<PropertyDescriptor, PropertyConfiguration> entry : component.getProperties().entrySet()) {
+            final PropertyConfiguration configuration = entry.getValue();
+            if (configuration == null) {
+                continue;
+            }
+
+            for (final ParameterReference parameterReference : configuration.getParameterReferences()) {
+                final Optional<String> parameterNameOption = parameterReference.getParameterName();
+                if (!parameterNameOption.isPresent()) {
+                    continue;
+                }
+
+                final String referencedParameterName = parameterNameOption.get();
+                if (referencedParameterName.equals(parameterName)) {
+                    if (entry.getKey().isSensitive() && !Boolean.TRUE.equals(parameterSensitive)) {
+                        throw new IllegalStateException("Cannot update Parameter Context " + contextName + " because the update would add a Non-Sensitive Parameter " +
+                            "named '" + parameterName + "' but this Parameter already is referenced by a Sensitive Property.");
+                    }
+
+                    if (!entry.getKey().isSensitive() && Boolean.TRUE.equals(parameterSensitive)) {
+                        throw new IllegalStateException("Cannot update Parameter Context " + contextName + " because the update would add a Sensitive Parameter named " +
+                            "'" + parameterName + "' but this Parameter already is referenced by a Non-Sensitive Property.");
+                    }
+
+                    if (verifyComponentStates && active) {
+                        throw new IllegalStateException("Cannot update Parameter Context " + contextName + " because it has Parameters that are being referenced by a " +
+                            activeExplanation + ".");
+                    }
+                }
+            }
+        }
     }
 
     private void verifyNoNamingConflict(final String contextName) {
@@ -134,19 +208,42 @@ public class StandardParameterContextDAO implements ParameterContextDAO {
 
     @Override
     public void verifyDelete(final String parameterContextId) {
-        // TODO: Need to verify that Parameter Context not in use by any 'active' components
-        final ParameterContext context = getParameterContext(parameterContextId);
+        // Find all Process Groups that are bound to the Parameter Context
+        final List<ProcessGroup> groupsReferencingParameterContext = getBoundProcessGroups(parameterContextId);
 
+        // If any component is referencing a Parameter and is running/enabled then fail
+        for (final ProcessGroup group : groupsReferencingParameterContext) {
+            for (final ProcessorNode processor : group.getProcessors()) {
+                if (!processor.getReferencedParameterNames().isEmpty() && processor.isRunning()) {
+                    throw new IllegalStateException("Cannot delete Parameter Context with ID " + parameterContextId + " because it is in use by at least one Processor that is running");
+                }
+            }
+
+            for (final ControllerServiceNode service : group.getControllerServices(false)) {
+                if (!service.getReferencedParameterNames().isEmpty() && service.getState() != ControllerServiceState.DISABLED) {
+                    throw new IllegalStateException("Cannot delete Parameter Context with ID " + parameterContextId + " because it is in use by at least one Controller Service that is enabled");
+                }
+            }
+        }
     }
 
     @Override
     public void deleteParameterContext(final String parameterContextId) {
         verifyDelete(parameterContextId);
 
-        // TODO: Implement
+        // Remove the Parameter Context from the manager
+        final ParameterContext parameterContext = flowManager.getParameterContextManager().removeParameterContext(parameterContextId);
+
+        // Update all Process Groups that currently are bound to the Parameter Context so that they are no longer bound to any Parameter Context
+        getBoundProcessGroups(parameterContextId).forEach(group -> group.setParameterContext(null));
     }
 
     public void setFlowController(final FlowController flowController) {
         this.flowManager = flowController.getFlowManager();
+    }
+
+    private List<ProcessGroup> getBoundProcessGroups(final String parameterContextId) {
+        final ProcessGroup rootGroup = flowManager.getRootGroup();
+        return rootGroup.findAllProcessGroups(group -> group.getParameterContext() != null && group.getParameterContext().getIdentifier().equals(parameterContextId));
     }
 }

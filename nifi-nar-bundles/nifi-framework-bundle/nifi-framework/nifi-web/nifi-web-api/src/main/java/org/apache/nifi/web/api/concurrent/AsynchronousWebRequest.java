@@ -24,9 +24,9 @@ import java.util.Date;
 public interface AsynchronousWebRequest<T> {
 
     /**
-     * @return the ID of the process group that the request is for
+     * @return the ID of the component that the request is for
      */
-    String getProcessGroupId();
+    String getComponentId();
 
     /**
      * @return whether or not this request has completed

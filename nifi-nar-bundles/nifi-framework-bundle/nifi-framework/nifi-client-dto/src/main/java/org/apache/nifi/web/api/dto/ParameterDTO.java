@@ -17,8 +17,10 @@
 package org.apache.nifi.web.api.dto;
 
 import io.swagger.annotations.ApiModelProperty;
+import org.apache.nifi.web.api.entity.AffectedComponentEntity;
 
 import javax.xml.bind.annotation.XmlType;
+import java.util.Set;
 
 @XmlType(name = "parameter")
 public class ParameterDTO {
@@ -26,6 +28,7 @@ public class ParameterDTO {
     private String description;
     private Boolean sensitive;
     private String value;
+    private Set<AffectedComponentEntity> referencingComponents;
 
     @ApiModelProperty("The name of the Parameter")
     public String getName() {
@@ -61,6 +64,15 @@ public class ParameterDTO {
 
     public void setValue(final String value) {
         this.value = value;
+    }
+
+    @ApiModelProperty("The set of all components in the flow that are referencing this Parameter")
+    public Set<AffectedComponentEntity> getReferencingComponents() {
+        return referencingComponents;
+    }
+
+    public void setReferencingComponents(final Set<AffectedComponentEntity> referencingComponents) {
+        this.referencingComponents = referencingComponents;
     }
 
     @Override

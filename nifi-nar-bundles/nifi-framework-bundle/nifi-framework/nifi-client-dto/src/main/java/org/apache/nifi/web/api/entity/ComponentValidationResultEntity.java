@@ -14,12 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.nifi.web.api.entity;
 
-package org.apache.nifi.web.api.dto;
+import org.apache.nifi.web.api.dto.ComponentValidationResultDTO;
 
-import javax.xml.bind.annotation.XmlType;
+import javax.xml.bind.annotation.XmlRootElement;
 
-@XmlType(name = "varaibleRegistryUpdateStep")
-public class VariableRegistryUpdateStepDTO extends UpdateStepDTO {
+@XmlRootElement(name = "componentValidationResultEntity")
+public class ComponentValidationResultEntity extends ComponentEntity implements Permissible<ComponentValidationResultDTO> {
+    private ComponentValidationResultDTO validationResult;
+
+    /**
+     * @return variable referencing components that is being serialized
+     */
+    public ComponentValidationResultDTO getComponent() {
+        return validationResult;
+    }
+
+    public void setComponent(ComponentValidationResultDTO component) {
+        this.validationResult = component;
+    }
 
 }

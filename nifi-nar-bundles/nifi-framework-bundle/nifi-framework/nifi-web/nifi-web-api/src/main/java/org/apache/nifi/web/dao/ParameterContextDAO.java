@@ -17,6 +17,7 @@
 package org.apache.nifi.web.dao;
 
 import org.apache.nifi.parameter.ParameterContext;
+import org.apache.nifi.parameter.ParameterReferenceManager;
 import org.apache.nifi.web.api.dto.ParameterContextDTO;
 
 import java.util.Set;
@@ -36,6 +37,12 @@ public interface ParameterContextDAO {
      * @param parameterContextDto dto
      */
     void verifyCreate(ParameterContextDTO parameterContextDto);
+
+    /**
+     * Returns the ParameterReferenceManager
+     * @return the ParameterReferenceManager
+     */
+    ParameterReferenceManager getParameterReferenceManager();
 
     /**
      * Creates a parameter context.

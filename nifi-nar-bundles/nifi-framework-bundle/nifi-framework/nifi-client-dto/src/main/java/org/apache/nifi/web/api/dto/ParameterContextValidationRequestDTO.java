@@ -17,14 +17,25 @@
 package org.apache.nifi.web.api.dto;
 
 import io.swagger.annotations.ApiModelProperty;
+import org.apache.nifi.web.api.entity.ComponentValidationResultsEntity;
 
 import javax.xml.bind.annotation.XmlType;
 
-@XmlType(name = "parameterContextUpdateRequest")
-public class ParameterContextUpdateRequestDTO extends AsynchronousRequestDTO<ParameterContextUpdateStepDTO> {
+@XmlType(name = "parameterContextValidationRequest")
+public class ParameterContextValidationRequestDTO extends AsynchronousRequestDTO<ParameterContextValidationStepDTO> {
     private ParameterContextDTO parameterContext;
+    private ComponentValidationResultsEntity componentValidationResults;
 
-    @ApiModelProperty(value = "The Parameter Context that is being operated on. This may not be populated until the request has successfully completed.", readOnly = true)
+    @ApiModelProperty(value = "The Validation Results that were calculated for each component. This value may not be set until the request completes.", readOnly = true)
+    public ComponentValidationResultsEntity getComponentValidationResults() {
+        return componentValidationResults;
+    }
+
+    public void setComponentValidationResults(final ComponentValidationResultsEntity componentValidationResults) {
+        this.componentValidationResults = componentValidationResults;
+    }
+
+    @ApiModelProperty("The Parameter Context that is being operated on.")
     public ParameterContextDTO getParameterContext() {
         return parameterContext;
     }
@@ -32,4 +43,5 @@ public class ParameterContextUpdateRequestDTO extends AsynchronousRequestDTO<Par
     public void setParameterContext(final ParameterContextDTO parameterContext) {
         this.parameterContext = parameterContext;
     }
+
 }

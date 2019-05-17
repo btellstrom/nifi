@@ -48,6 +48,12 @@ public class StandardParameterContextManager implements ParameterContextManager 
     }
 
     @Override
+    public synchronized ParameterContext removeParameterContext(final String parameterContextId) {
+        Objects.requireNonNull(parameterContextId);
+        return parameterContexts.remove(parameterContextId);
+    }
+
+    @Override
     public synchronized Set<ParameterContext> getParameterContexts() {
         return new HashSet<>(parameterContexts.values());
     }

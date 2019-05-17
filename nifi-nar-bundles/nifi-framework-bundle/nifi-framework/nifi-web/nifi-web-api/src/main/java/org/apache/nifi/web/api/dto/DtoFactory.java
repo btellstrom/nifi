@@ -65,6 +65,7 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.state.Scope;
 import org.apache.nifi.components.state.StateMap;
+import org.apache.nifi.components.validation.ValidationState;
 import org.apache.nifi.components.validation.ValidationStatus;
 import org.apache.nifi.connectable.Connectable;
 import org.apache.nifi.connectable.ConnectableType;
@@ -120,7 +121,9 @@ import org.apache.nifi.history.History;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.nar.NarClassLoadersHolder;
 import org.apache.nifi.parameter.Parameter;
+import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.parameter.ParameterDescriptor;
+import org.apache.nifi.parameter.ParameterReferenceManager;
 import org.apache.nifi.processor.Processor;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.provenance.lineage.ComputeLineageResult;
@@ -129,7 +132,6 @@ import org.apache.nifi.provenance.lineage.LineageEdge;
 import org.apache.nifi.provenance.lineage.LineageNode;
 import org.apache.nifi.provenance.lineage.ProvenanceEventLineageNode;
 import org.apache.nifi.registry.ComponentVariableRegistry;
-import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.registry.flow.FlowRegistry;
 import org.apache.nifi.registry.flow.VersionControlInformation;
 import org.apache.nifi.registry.flow.VersionedComponent;
@@ -216,6 +218,7 @@ import org.apache.nifi.web.api.entity.ControllerServiceEntity;
 import org.apache.nifi.web.api.entity.FlowBreadcrumbEntity;
 import org.apache.nifi.web.api.entity.PortEntity;
 import org.apache.nifi.web.api.entity.PortStatusSnapshotEntity;
+import org.apache.nifi.web.api.entity.ProcessGroupEntity;
 import org.apache.nifi.web.api.entity.ProcessGroupStatusSnapshotEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
 import org.apache.nifi.web.api.entity.ProcessorStatusSnapshotEntity;
@@ -1356,21 +1359,32 @@ public final class DtoFactory {
         return dto;
     }
 
-    public ParameterContextDTO createParameterContextDto(final ParameterContext parameterContext) {
+    public ParameterContextDTO createParameterContextDto(final ParameterContext parameterContext, final ParameterReferenceManager parameterReferenceManager, final RevisionManager revisionManager) {
         final ParameterContextDTO dto = new ParameterContextDTO();
         dto.setId(parameterContext.getIdentifier());
         dto.setName(parameterContext.getName());
 
+        final Set<ProcessGroupEntity> boundGroups = new HashSet<>();
+        for (final ProcessGroup processGroup : parameterReferenceManager.getProcessGroupsBound(parameterContext)) {
+            final ProcessGroupDTO processGroupDto = createConciseProcessGroupDto(processGroup);
+            final RevisionDTO revisionDto = createRevisionDTO(revisionManager.getRevision(processGroup.getIdentifier()));
+            final PermissionsDTO permissionsDto = createPermissionsDto(processGroup);
+            final ProcessGroupEntity processGroupEntity = entityFactory.createProcessGroupEntity(processGroupDto, revisionDto, permissionsDto, null, null);
+            boundGroups.add(processGroupEntity);
+        }
+        dto.setBoundProcessGroups(boundGroups);
+
         final Set<ParameterDTO> parameterDtos = new LinkedHashSet<>();
         for (final Parameter parameter : parameterContext.getParameters().values()) {
-            parameterDtos.add(createParameterDto(parameter));
+            parameterDtos.add(createParameterDto(parameterContext, parameter, parameterReferenceManager, revisionManager));
         }
 
         dto.setParameters(parameterDtos);
         return dto;
     }
 
-    public ParameterDTO createParameterDto(final Parameter parameter) {
+    public ParameterDTO createParameterDto(final ParameterContext parameterContext, final Parameter parameter, final ParameterReferenceManager parameterReferenceManager,
+                                           final RevisionManager revisionManager) {
         final ParameterDescriptor descriptor = parameter.getDescriptor();
 
         final ParameterDTO dto = new ParameterDTO();
@@ -1378,6 +1392,14 @@ public final class DtoFactory {
         dto.setDescription(descriptor.getDescription());
         dto.setSensitive(descriptor.isSensitive());
         dto.setValue(descriptor.isSensitive() ? SENSITIVE_VALUE_MASK : parameter.getValue());
+
+        final Set<ComponentNode> referencingComponents = new HashSet<>();
+        referencingComponents.addAll(parameterReferenceManager.getProcessorsReferencing(parameterContext, descriptor.getName()));
+        referencingComponents.addAll(parameterReferenceManager.getControllerServicesReferencing(parameterContext, descriptor.getName()));
+
+        final Set<AffectedComponentEntity> referencingComponentEntities = createAffectedComponentEntities(referencingComponents, revisionManager);
+        dto.setReferencingComponents(referencingComponentEntities);
+
         return dto;
     }
 
@@ -2013,6 +2035,46 @@ public final class DtoFactory {
 
             dto.setValidationErrors(errors);
         }
+
+        return dto;
+    }
+
+    public ComponentValidationResultDTO createComponentValidationResultDto(final ComponentNode component, final ValidationState validationResults) {
+        final ComponentValidationResultDTO dto = new ComponentValidationResultDTO();
+        dto.setId(component.getIdentifier());
+        dto.setName(component.getName());
+        dto.setProcessGroupId(component.getProcessGroupIdentifier());
+
+        if (component instanceof ProcessorNode) {
+            final ProcessorNode node = ((ProcessorNode) component);
+            dto.setState(node.getScheduledState().name());
+            dto.setActiveThreadCount(node.getActiveThreadCount());
+            dto.setReferenceType(AffectedComponentDTO.COMPONENT_TYPE_PROCESSOR);
+        } else if (component instanceof ControllerServiceNode) {
+            final ControllerServiceNode node = ((ControllerServiceNode) component);
+            dto.setState(node.getState().name());
+            dto.setReferenceType(AffectedComponentDTO.COMPONENT_TYPE_CONTROLLER_SERVICE);
+        }
+
+        final Collection<ValidationResult> validationErrors = component.getValidationErrors();
+        if (validationErrors != null && !validationErrors.isEmpty()) {
+            final List<String> errors = new ArrayList<>();
+            for (final ValidationResult validationResult : validationErrors) {
+                errors.add(validationResult.toString());
+            }
+
+            dto.setValidationErrors(errors);
+            dto.setCurrentlyValid(false);
+        } else {
+            dto.setCurrentlyValid(true);
+        }
+
+        final List<String> resultantValidationErrors = validationResults.getValidationErrors().stream()
+            .map(ValidationResult::toString)
+            .collect(Collectors.toList());
+
+        dto.setResultantValidationErrors(resultantValidationErrors);
+        dto.setResultsValid(resultantValidationErrors.isEmpty());
 
         return dto;
     }

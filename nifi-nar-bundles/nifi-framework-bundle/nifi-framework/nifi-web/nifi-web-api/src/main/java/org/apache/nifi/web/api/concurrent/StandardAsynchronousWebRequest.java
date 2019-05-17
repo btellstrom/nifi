@@ -17,14 +17,14 @@
 
 package org.apache.nifi.web.api.concurrent;
 
+import org.apache.nifi.authorization.user.NiFiUser;
+
 import java.util.Date;
 import java.util.Objects;
 
-import org.apache.nifi.authorization.user.NiFiUser;
-
 public class StandardAsynchronousWebRequest<T> implements AsynchronousWebRequest<T> {
     private final String id;
-    private final String processGroupId;
+    private final String componentId;
     private final NiFiUser user;
 
     private volatile boolean complete = false;
@@ -36,9 +36,9 @@ public class StandardAsynchronousWebRequest<T> implements AsynchronousWebRequest
     private volatile T results;
     private volatile Runnable cancelCallback;
 
-    public StandardAsynchronousWebRequest(final String requestId, final String processGroupId, final NiFiUser user, final String state) {
+    public StandardAsynchronousWebRequest(final String requestId, final String componentId, final NiFiUser user, final String state) {
         this.id = requestId;
-        this.processGroupId = processGroupId;
+        this.componentId = componentId;
         this.user = user;
         this.state = state;
     }
@@ -53,8 +53,8 @@ public class StandardAsynchronousWebRequest<T> implements AsynchronousWebRequest
     }
 
     @Override
-    public String getProcessGroupId() {
-        return processGroupId;
+    public String getComponentId() {
+        return componentId;
     }
 
     @Override

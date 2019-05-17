@@ -14,12 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.nifi.web.api.entity;
 
-package org.apache.nifi.web.api.dto;
+import io.swagger.annotations.ApiModelProperty;
 
-import javax.xml.bind.annotation.XmlType;
+import javax.xml.bind.annotation.XmlRootElement;
+import java.util.List;
 
-@XmlType(name = "varaibleRegistryUpdateStep")
-public class VariableRegistryUpdateStepDTO extends UpdateStepDTO {
+@XmlRootElement(name = "componentValidationResults")
+public class ComponentValidationResultsEntity extends Entity {
+    private List<ComponentValidationResultEntity> componentValidationResults;
 
+    @ApiModelProperty("A List of ComponentValidationResultEntity, one for each component that is validated")
+    public List<ComponentValidationResultEntity> getValidationResults() {
+        return componentValidationResults;
+    }
+
+    public void setValidationResults(final List<ComponentValidationResultEntity> componentValidationResults) {
+        this.componentValidationResults = componentValidationResults;
+    }
 }

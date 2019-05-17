@@ -23,5 +23,7 @@ public interface ParameterContextManager {
 
     void addParameterContext(ParameterContext parameterContext);
 
+    ParameterContext removeParameterContext(String parameterContextId);
+
     Set<ParameterContext> getParameterContexts();
 }

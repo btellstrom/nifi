@@ -46,8 +46,7 @@ public class Parameter {
         }
 
         final Parameter parameter = (Parameter) o;
-        return Objects.equals(descriptor, parameter.descriptor) &&
-            Objects.equals(value, parameter.value);
+        return Objects.equals(descriptor, parameter.descriptor) && Objects.equals(value, parameter.value);
     }
 
     @Override

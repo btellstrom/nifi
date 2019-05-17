@@ -2865,8 +2865,10 @@ public final class StandardProcessGroup implements ProcessGroup {
         writeLock.lock();
         try {
             verifyCanSetParameterContext(parameterContext);
-
             this.parameterContext = parameterContext;
+
+            getProcessors().forEach(ProcessorNode::resetValidationState);
+            getControllerServices(false).forEach(ControllerServiceNode::resetValidationState);
         } finally {
             writeLock.unlock();
         }
